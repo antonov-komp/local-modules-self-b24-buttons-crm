@@ -104,6 +104,7 @@ class my_bpbutton extends CModule
             'My\\BpButton\\Internals\\LogsTable' => 'lib/Internals/LogsTable.php',
             'My\\BpButton\\Service\\ButtonService' => 'lib/Service/ButtonService.php',
             'My\\BpButton\\Service\\SettingsResolver' => 'lib/Service/SettingsResolver.php',
+            'My\\BpButton\\Service\\SettingsFormService' => 'lib/Service/SettingsFormService.php',
             'My\\BpButton\\Controller\\ButtonController' => 'lib/Controller/ButtonController.php',
             'My\\BpButton\\Helper\\SecurityHelper' => 'lib/Helper/SecurityHelper.php',
         ]);
@@ -301,6 +302,12 @@ class my_bpbutton extends CModule
         $proxyListFile = new File($proxyListPath);
         $proxyListFile->putContents($proxyListContent);
 
+        // Создаём/обновляем прокси для формы редактирования
+        $proxyEditPath = $installAdminDir . '/my_bpbutton_bpbutton_edit.php';
+        $proxyEditContent = "<?php\nrequire_once(\$_SERVER['DOCUMENT_ROOT'] . '/local/modules/my.bpbutton/admin/bpbutton_edit.php');\n";
+        $proxyEditFile = new File($proxyEditPath);
+        $proxyEditFile->putContents($proxyEditContent);
+
         // Копируем прокси в /bitrix/admin/ (всегда обновляем)
         CopyDirFiles($installAdminDir, $adminDir, true, true);
     }
@@ -315,6 +322,7 @@ class my_bpbutton extends CModule
         // Удаляем прокси файлы
         $proxyFiles = [
             'my_bpbutton_bpbutton_list.php',
+            'my_bpbutton_bpbutton_edit.php',
         ];
 
         foreach ($proxyFiles as $file) {

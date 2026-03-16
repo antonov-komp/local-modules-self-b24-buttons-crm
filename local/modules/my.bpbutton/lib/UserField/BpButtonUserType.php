@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace My\BpButton\UserField;
 
 use Bitrix\Main\Localization\Loc;
+use My\BpButton\Internals\SettingsTable;
 use My\BpButton\Service\SettingsResolver;
 use My\BpButton\UserField\ButtonHtmlRenderer;
 
@@ -179,27 +180,67 @@ class BpButtonUserType
     public static function getSettingsHTML(array $field, string $htmlControlName, array $additional): string
     {
         $fieldId = (int)($field['ID'] ?? 0);
-        
+
         if ($fieldId > 0) {
-            // Если поле уже создано, показываем ссылку на настройки (передаём FIELD_ID для поиска записи SettingsTable)
-            $settingsUrl = '/bitrix/admin/my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&FIELD_ID=' . $fieldId . '&action=edit';
-            
+            $settingsUrl = '/bitrix/admin/my_bpbutton_bpbutton_edit.php?lang=' . LANGUAGE_ID . '&FIELD_ID=' . $fieldId;
+            $buttonLabel = Loc::getMessage('BPBUTTON_SETTINGS_BUTTON_LABEL') ?: 'Настроить кнопку';
+            $buttonTitle = Loc::getMessage('BPBUTTON_SETTINGS_BUTTON_TITLE') ?: 'Открыть страницу настроек';
+            $description = Loc::getMessage('BPBUTTON_SETTINGS_DESCRIPTION') ?: 'Настройте URL обработчика, заголовок и другие параметры.';
+
+            $settingsRow = null;
+            try {
+                $settingsRow = SettingsTable::getList([
+                    'filter' => ['=FIELD_ID' => $fieldId],
+                    'limit' => 1,
+                ])->fetch();
+            } catch (\Throwable $e) {
+                // Игнорируем ошибки БД
+            }
+
+            $summaryHtml = '';
+            if ($settingsRow) {
+                $url = trim((string)($settingsRow['HANDLER_URL'] ?? ''));
+                $title = trim((string)($settingsRow['TITLE'] ?? ''));
+                $active = ($settingsRow['ACTIVE'] ?? 'Y') === 'Y';
+                $activeText = $active
+                    ? (Loc::getMessage('BPBUTTON_SETTINGS_ACTIVE') ?: 'Активна')
+                    : (Loc::getMessage('BPBUTTON_SETTINGS_INACTIVE') ?: 'Не активна');
+
+                $currentLabel = Loc::getMessage('BPBUTTON_SETTINGS_CURRENT') ?: 'Текущие настройки:';
+                $urlLabel = Loc::getMessage('BPBUTTON_SETTINGS_URL') ?: 'URL: %s';
+                $titleLabel = Loc::getMessage('BPBUTTON_SETTINGS_TITLE') ?: 'Заголовок: %s';
+
+                $summaryHtml = '<div style="margin-top: 12px; padding: 10px; background: #f9f9f9; border-radius: 4px; font-size: 12px;">';
+                $summaryHtml .= '<div style="font-weight: 600; margin-bottom: 6px;">' . htmlspecialcharsbx($currentLabel) . '</div>';
+                $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx(sprintf($urlLabel, $url ?: '—')) . '</div>';
+                $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx(sprintf($titleLabel, $title ?: '—')) . '</div>';
+                $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx($activeText) . '</div>';
+                $summaryHtml .= '</div>';
+            } else {
+                $notConfigured = Loc::getMessage('BPBUTTON_SETTINGS_NOT_CONFIGURED') ?: 'Кнопка ещё не настроена.';
+                $summaryHtml = '<div style="margin-top: 12px; color: #828b95; font-size: 12px;">' . htmlspecialcharsbx($notConfigured) . '</div>';
+            }
+
             return sprintf(
                 '<tr>
                     <td colspan="2">
                         <div style="margin: 10px 0;">
-                            <a href="%s" target="_blank" class="adm-btn">Настроить кнопку</a>
-                            <span style="margin-left: 10px; color: #666;">
-                                Настройте URL обработчика, заголовок и другие параметры кнопки
-                            </span>
+                            <a href="%s" target="_blank" class="adm-btn" title="%s">%s</a>
+                            <span style="margin-left: 10px; color: #535c69; font-size: 12px;">%s</span>
+                            %s
                         </div>
                     </td>
                 </tr>',
-                htmlspecialcharsbx($settingsUrl)
+                htmlspecialcharsbx($settingsUrl),
+                htmlspecialcharsbx($buttonTitle),
+                htmlspecialcharsbx($buttonLabel),
+                htmlspecialcharsbx($description),
+                $summaryHtml
             );
         }
-        
-        return '<tr><td colspan="2"><div style="margin: 10px 0; color: #666;">После создания поля вы сможете настроить параметры кнопки в разделе настроек модуля.</div></td></tr>';
+
+        $beforeCreate = Loc::getMessage('BPBUTTON_SETTINGS_BEFORE_CREATE') ?: 'После создания поля вы сможете настроить параметры кнопки.';
+        return '<tr><td colspan="2"><div style="margin: 10px 0; color: #535c69; font-size: 12px;">' . htmlspecialcharsbx($beforeCreate) . '</div></td></tr>';
     }
 
     /**

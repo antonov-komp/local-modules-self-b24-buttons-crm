@@ -6,7 +6,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use My\BpButton\Helper\SecurityHelper;
-use My\BpButton\Internals\SettingsTable;
+use My\BpButton\Service\SettingsFormService;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php';
 
@@ -79,7 +79,8 @@ if ($active !== 'Y' && $active !== 'N') {
 }
 
 try {
-    $settingsRow = SettingsTable::getByPrimary($id)->fetch();
+    $formService = new SettingsFormService();
+    $settingsRow = $formService->getById($id);
     if (!$settingsRow) {
         http_response_code(404);
         echo json_encode([
@@ -91,10 +92,7 @@ try {
         exit;
     }
 
-    $updateResult = SettingsTable::update($id, [
-        'ACTIVE' => $active,
-        'UPDATED_AT' => new \Bitrix\Main\Type\DateTime(),
-    ]);
+    $updateResult = $formService->toggleActive($id, $active);
 
     if (!$updateResult->isSuccess()) {
         http_response_code(500);

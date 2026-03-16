@@ -35,309 +35,25 @@ $APPLICATION->SetTitle(Loc::getMessage('MY_BPBUTTON_LIST_PAGE_TITLE'));
 $request = Application::getInstance()->getContext()->getRequest();
 $isPost = $request->isPost() && check_bitrix_sessid();
 
-// Simple routing: edit form vs list
 $id = (int)$request->get('ID');
 $fieldIdParam = (int)$request->get('FIELD_ID');
 $action = (string)$request->get('action');
 
-// Если передан FIELD_ID — ищем запись SettingsTable по FIELD_ID и подставляем ID
-if ($fieldIdParam > 0) {
-    $settingsRow = SettingsTable::getList([
-        'filter' => ['=FIELD_ID' => $fieldIdParam],
-        'limit'  => 1,
-    ])->fetch();
-    if ($settingsRow && !empty($settingsRow['ID'])) {
-        $id = (int)$settingsRow['ID'];
-    }
-}
-
-// ---------------------------------------------------------------------
-// Edit form
-// ---------------------------------------------------------------------
-if ($action === 'edit' && $id > 0) {
-    $isAjax = $request->get('IFRAME') === 'Y' && $request->get('IFRAME_TYPE') === 'SIDE_SLIDER';
-
-    // Обработка POST для AJAX — ДО вывода HTML, иначе JSON будет испорчен
-    if ($isPost && $isAjax && (isset($_POST['save']) || isset($_POST['apply'])) && $moduleRight >= 'W') {
-        $postId = (int)($request->getPost('ID') ?: $id);
-        $settingsRow = $postId > 0 ? SettingsTable::getByPrimary($postId)->fetch() : null;
-        if ($settingsRow) {
-            $handlerUrl = trim((string)$request->getPost('HANDLER_URL'));
-            $title = trim((string)$request->getPost('TITLE'));
-            $width = trim((string)$request->getPost('WIDTH'));
-            $buttonText = trim((string)$request->getPost('BUTTON_TEXT'));
-            $buttonSize = trim((string)$request->getPost('BUTTON_SIZE'));
-            $active = $request->getPost('ACTIVE') === 'Y' ? 'Y' : 'N';
-
-            $errors = [];
-            if ($handlerUrl !== '' && !preg_match('~^https?://~i', $handlerUrl) && $handlerUrl[0] !== '/') {
-                $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_INVALID_URL');
-            }
-            if ($width !== '' && !preg_match('~^\d+$~', $width) && !preg_match('~^\d+%$~', $width)) {
-                $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_INVALID_WIDTH');
-            }
-            $allowedSizes = ['default', 'sm', 'lg'];
-            if ($buttonSize !== '' && !in_array($buttonSize, $allowedSizes, true)) {
-                $buttonSize = 'default';
-            }
-
-            if (empty($errors)) {
-                $updateResult = SettingsTable::update($postId, [
-                    'HANDLER_URL' => $handlerUrl !== '' ? $handlerUrl : null,
-                    'TITLE'       => $title !== '' ? $title : null,
-                    'WIDTH'       => $width !== '' ? $width : null,
-                    'BUTTON_TEXT' => $buttonText !== '' ? $buttonText : null,
-                    'BUTTON_SIZE' => $buttonSize !== '' ? $buttonSize : null,
-                    'ACTIVE'      => $active,
-                    'UPDATED_AT'  => new \Bitrix\Main\Type\DateTime(),
-                ]);
-
-                if ($updateResult->isSuccess()) {
-                    header('Content-Type: application/json; charset=' . SITE_CHARSET);
-                    echo json_encode([
-                        'status'     => 'success',
-                        'formParams' => ['ID' => $postId, 'action' => 'edit'],
-                    ]);
-                    return;
-                }
-                $errors[] = implode("\n", $updateResult->getErrorMessages());
-            }
-
-            if (!empty($errors)) {
-                header('Content-Type: application/json; charset=' . SITE_CHARSET);
-                echo json_encode([
-                    'status'  => 'error',
-                    'message' => implode("\n", $errors),
-                ]);
-                return;
-            }
-        }
-    }
-
-    // Подключение JS для SidePanel
-    $isSidePanel = $request->get('IFRAME') === 'Y' || $request->get('IFRAME_TYPE') === 'SIDE_SLIDER';
-    if ($isSidePanel && class_exists(Extension::class)) {
-        Extension::load('ui.sidepanel');
-        Extension::load('ui.notification');
-    }
-
-    require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
-
-    if ($moduleRight < 'W') {
-        ShowError(Loc::getMessage('ACCESS_DENIED'));
-        require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.php';
-        return;
-    }
-
-    $settingsRow = SettingsTable::getByPrimary($id)->fetch();
-    if (!$settingsRow) {
-        ShowError('Record not found');
-        require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.php';
-        return;
-    }
-
-    $fieldInfo = null;
-    if (Loader::includeModule('main')) {
-        $fieldInfo = UserFieldTable::getList([
-            'select' => ['ID', 'FIELD_NAME', 'ENTITY_ID'],
-            'filter' => ['=ID' => (int)$settingsRow['FIELD_ID']],
+// Редирект на страницу редактирования при action=edit
+if ($action === 'edit') {
+    if ($fieldIdParam > 0) {
+        $settingsRow = SettingsTable::getList([
+            'filter' => ['=FIELD_ID' => $fieldIdParam],
+            'limit'  => 1,
         ])->fetch();
-    }
-
-    $errors = [];
-
-    if ($isPost && (isset($_POST['save']) || isset($_POST['apply']))) {
-        $handlerUrl = trim((string)$request->getPost('HANDLER_URL'));
-        $title = trim((string)$request->getPost('TITLE'));
-        $width = trim((string)$request->getPost('WIDTH'));
-        $buttonText = trim((string)$request->getPost('BUTTON_TEXT'));
-        $buttonSize = trim((string)$request->getPost('BUTTON_SIZE'));
-        $active = $request->getPost('ACTIVE') === 'Y' ? 'Y' : 'N';
-
-        // Minimal URL validation: allow relative or absolute URLs
-        if ($handlerUrl !== '' && !preg_match('~^https?://~i', $handlerUrl) && $handlerUrl[0] !== '/') {
-            $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_INVALID_URL');
-        }
-        $allowedSizes = ['default', 'sm', 'lg'];
-        if ($buttonSize !== '' && !in_array($buttonSize, $allowedSizes, true)) {
-            $buttonSize = 'default';
-        }
-
-        // Width validation: integer or number%
-        if ($width !== '' && !preg_match('~^\d+$~', $width) && !preg_match('~^\d+%$~', $width)) {
-            $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_INVALID_WIDTH');
-        }
-
-        if (empty($errors)) {
-            $updateResult = SettingsTable::update($id, [
-                'HANDLER_URL' => $handlerUrl !== '' ? $handlerUrl : null,
-                'TITLE'       => $title !== '' ? $title : null,
-                'WIDTH'       => $width !== '' ? $width : null,
-                'BUTTON_TEXT' => $buttonText !== '' ? $buttonText : null,
-                'BUTTON_SIZE' => $buttonSize !== '' ? $buttonSize : null,
-                'ACTIVE'      => $active,
-                'UPDATED_AT'  => new \Bitrix\Main\Type\DateTime(),
-            ]);
-
-            if ($updateResult->isSuccess()) {
-                $isSidePanel = $request->get('IFRAME') === 'Y' || $request->get('IFRAME_TYPE') === 'SIDE_SLIDER';
-                if ($isSidePanel) {
-                    ?>
-                    <script>
-                        if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
-                            BX.UI.Notification.Center.notify({
-                                content: <?= CUtil::PhpToJSObject(Loc::getMessage('MY_BPBUTTON_EDIT_SAVE_SUCCESS')) ?>,
-                                autoHideDelay: 3000,
-                            });
-                        }
-                        if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance) {
-                            setTimeout(function() {
-                                BX.SidePanel.Instance.close();
-                                if (window.top && window.top.location) {
-                                    window.top.location.reload();
-                                }
-                            }, 500);
-                        }
-                    </script>
-                    <?php
-                    CAdminMessage::ShowMessage([
-                        'MESSAGE' => Loc::getMessage('MY_BPBUTTON_EDIT_SAVE_SUCCESS'),
-                        'TYPE'    => 'OK',
-                    ]);
-                } else {
-                    CAdminMessage::ShowMessage([
-                        'MESSAGE' => Loc::getMessage('MY_BPBUTTON_EDIT_SAVE_SUCCESS'),
-                        'TYPE'    => 'OK',
-                    ]);
-
-                    if (isset($_POST['save'])) {
-                        LocalRedirect('my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID);
-                    } else {
-                        LocalRedirect('my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&action=edit&ID=' . $id);
-                    }
-                }
-            } else {
-                $errors[] = implode("\n", $updateResult->getErrorMessages());
-            }
-        }
-
-        if (!empty($errors)) {
-            CAdminMessage::ShowMessage([
-                'MESSAGE' => Loc::getMessage('MY_BPBUTTON_EDIT_SAVE_ERROR', ['#ERROR#' => implode("\n", $errors)]),
-                'TYPE'    => 'ERROR',
-            ]);
+        if ($settingsRow && !empty($settingsRow['ID'])) {
+            $id = (int)$settingsRow['ID'];
         }
     }
-
-    $tabControl = new CAdminTabControl('tabControl', [
-        [
-            'DIV'   => 'edit_main',
-            'TAB'   => Loc::getMessage('MY_BPBUTTON_EDIT_TAB_MAIN'),
-            'TITLE' => Loc::getMessage('MY_BPBUTTON_EDIT_TAB_MAIN_TITLE'),
-        ],
-    ]);
-
-    ?>
-    <form method="post" action="<?= htmlspecialcharsbx($APPLICATION->GetCurPageParam('', ['mode'])); ?>">
-        <?= bitrix_sessid_post(); ?>
-        <input type="hidden" name="lang" value="<?= LANGUAGE_ID ?>">
-        <input type="hidden" name="ID" value="<?= (int)$id ?>">
-        <input type="hidden" name="action" value="edit">
-        <?php
-        $tabControl->Begin();
-        $tabControl->BeginNextTab();
-
-        $fieldTitleParts = [];
-        if ($fieldInfo) {
-            $fieldTitleParts[] = '[' . $fieldInfo['FIELD_NAME'] . ']';
-        } else {
-            $fieldTitleParts[] = 'ID=' . (int)$settingsRow['FIELD_ID'];
-        }
-        $fieldTitle = implode(' ', $fieldTitleParts);
-
-        ?>
-        <tr>
-            <td width="40%"><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_FIELD_INFO'); ?>:</td>
-            <td width="60%"><?= htmlspecialcharsbx($fieldTitle); ?></td>
-        </tr>
-        <tr>
-            <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ENTITY_ID'); ?>:</td>
-            <td><?= htmlspecialcharsbx((string)$settingsRow['ENTITY_ID']); ?></td>
-        </tr>
-        <tr>
-            <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL'); ?>:</td>
-            <td>
-                <input type="text" name="HANDLER_URL" size="60"
-                       value="<?= htmlspecialcharsbx((string)$settingsRow['HANDLER_URL']); ?>"
-                       title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?>">
-                <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?></div>
-            </td>
-        </tr>
-        <tr>
-            <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_TITLE'); ?>:</td>
-            <td>
-                <input type="text" name="TITLE" size="40"
-                       value="<?= htmlspecialcharsbx((string)$settingsRow['TITLE']); ?>"
-                       title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_TITLE_HINT') ?: ''); ?>">
-                <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_TITLE_HINT') ?: ''); ?></div>
-            </td>
-        </tr>
-        <tr>
-            <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_TEXT'); ?>:</td>
-            <td>
-                <input type="text" name="BUTTON_TEXT" size="40"
-                       value="<?= htmlspecialcharsbx((string)($settingsRow['BUTTON_TEXT'] ?? '')); ?>"
-                       title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_TEXT_HINT') ?: ''); ?>">
-                <div style="margin-top: 4px; color: #666; font-size: 11px;">
-                    <?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_TEXT_HINT') ?: ''); ?>
-                </div>
-            </td>
-        </tr>
-        <tr>
-            <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_WIDTH'); ?>:</td>
-            <td>
-                <input type="text" name="WIDTH" size="10"
-                       value="<?= htmlspecialcharsbx((string)$settingsRow['WIDTH']); ?>"
-                       title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_WIDTH_HINT') ?: ''); ?>">
-                <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_WIDTH_HINT') ?: ''); ?></div>
-            </td>
-        </tr>
-        <tr>
-            <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE'); ?>:</td>
-            <td>
-                <?php
-                $currentSize = (string)($settingsRow['BUTTON_SIZE'] ?? '');
-                if (!in_array($currentSize, ['sm', 'lg'], true)) {
-                    $currentSize = 'default';
-                }
-                ?>
-                <select name="BUTTON_SIZE" title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_HINT') ?: ''); ?>">
-                    <option value="default"<?= $currentSize === 'default' ? ' selected' : ''; ?>><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_DEFAULT') ?: 'Стандартная'); ?></option>
-                    <option value="sm"<?= $currentSize === 'sm' ? ' selected' : ''; ?>><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_SM') ?: 'Маленькая'); ?></option>
-                    <option value="lg"<?= $currentSize === 'lg' ? ' selected' : ''; ?>><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_LG') ?: 'Большая'); ?></option>
-                </select>
-                <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_HINT') ?: ''); ?></div>
-            </td>
-        </tr>
-        <tr>
-            <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ACTIVE'); ?>:</td>
-            <td>
-                <input type="checkbox" name="ACTIVE" value="Y"<?= $settingsRow['ACTIVE'] === 'Y' ? ' checked' : ''; ?>
-                       title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ACTIVE_HINT') ?: ''); ?>">
-                <span style="margin-left: 6px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ACTIVE_HINT') ?: ''); ?></span>
-            </td>
-        </tr>
-        <?php
-        $tabControl->Buttons([
-            'back_url' => 'my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID,
-        ]);
-        $tabControl->End();
-        ?>
-    </form>
-    <?php
-
-    require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.php';
-    return;
+    if ($id > 0) {
+        LocalRedirect('my_bpbutton_bpbutton_edit.php?lang=' . LANGUAGE_ID . '&ID=' . $id);
+        return;
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -519,7 +235,7 @@ $lAdmin->AddHeaders([
 
 while ($row = $result->fetch()) {
     // Ссылка для открытия в SidePanel (если используется)
-    $editUrl = 'my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&action=edit&ID=' . (int)$row['ID'];
+    $editUrl = 'my_bpbutton_bpbutton_edit.php?lang=' . LANGUAGE_ID . '&ID=' . (int)$row['ID'];
     $listRow = $lAdmin->AddRow((string)$row['ID'], $row, $editUrl, Loc::getMessage('MY_BPBUTTON_LIST_EDIT_TITLE'));
 
     $fieldLabelParts = [];
@@ -596,7 +312,7 @@ while ($row = $result->fetch()) {
 
     $actions = [];
     if ($moduleRight >= 'W') {
-        $editUrl = 'my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&action=edit&ID=' . (int)$row['ID'];
+        $editUrl = 'my_bpbutton_bpbutton_edit.php?lang=' . LANGUAGE_ID . '&ID=' . (int)$row['ID'];
         // Используем SidePanel для открытия формы редактирования
         $actions[] = [
             'ICON'    => 'edit',
