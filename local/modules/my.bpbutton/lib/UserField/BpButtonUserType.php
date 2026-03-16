@@ -7,6 +7,7 @@ namespace My\BpButton\UserField;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
 use Bitrix\Main\UserTable;
+use My\BpButton\Internals\SettingsTable;
 
 Loc::loadMessages(__FILE__);
 
@@ -120,6 +121,48 @@ class BpButtonUserType
     }
 
     /**
+     * Получение текста кнопки для поля.
+     * Берёт BUTTON_TEXT из настроек (SettingsTable), при отсутствии — из языковых файлов.
+     * Кеширует настройки по FIELD_ID в рамках одного запроса.
+     *
+     * @param array $field
+     * @return string
+     */
+    protected static function getButtonTextForField(array $field): string
+    {
+        static $settingsCache = [];
+
+        $fieldId = (int)($field['ID'] ?? 0);
+        if ($fieldId <= 0) {
+            return Loc::getMessage('BPBUTTON_USER_TYPE_BUTTON_TEXT')
+                ?: Loc::getMessage('BPBUTTON_USER_TYPE_NAME')
+                ?: 'Кнопка';
+        }
+
+        if (!isset($settingsCache[$fieldId])) {
+            try {
+                $settingsRow = SettingsTable::getList([
+                    'select' => ['BUTTON_TEXT'],
+                    'filter' => ['=FIELD_ID' => $fieldId],
+                    'limit'  => 1,
+                ])->fetch();
+                $settingsCache[$fieldId] = $settingsRow ? trim((string)($settingsRow['BUTTON_TEXT'] ?? '')) : '';
+            } catch (\Throwable $e) {
+                $settingsCache[$fieldId] = '';
+            }
+        }
+
+        $buttonText = $settingsCache[$fieldId];
+        if ($buttonText !== '') {
+            return $buttonText;
+        }
+
+        return Loc::getMessage('BPBUTTON_USER_TYPE_BUTTON_TEXT')
+            ?: Loc::getMessage('BPBUTTON_USER_TYPE_NAME')
+            ?: 'Кнопка';
+    }
+
+    /**
      * Публичное представление поля в карточке CRM — кнопка Bitrix UI.
      *
      * @param array       $field
@@ -161,9 +204,8 @@ class BpButtonUserType
             }
         }
 
-        $buttonText = Loc::getMessage('BPBUTTON_USER_TYPE_BUTTON_TEXT')
-            ?: Loc::getMessage('BPBUTTON_USER_TYPE_NAME')
-            ?: 'Кнопка';
+        // Текст кнопки: из настроек (BUTTON_TEXT) или fallback на языковые файлы
+        $buttonText = static::getButtonTextForField($field);
 
         // Получаем ID сущности из поля или из дополнительных параметров
         $entityId = (string)($field['ENTITY_ID'] ?? $additional['ENTITY_ID'] ?? '');
@@ -313,8 +355,8 @@ class BpButtonUserType
         $fieldId = (int)($field['ID'] ?? 0);
         
         if ($fieldId > 0) {
-            // Если поле уже создано, показываем ссылку на настройки
-            $settingsUrl = '/bitrix/admin/my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&ID=' . $fieldId . '&action=edit';
+            // Если поле уже создано, показываем ссылку на настройки (передаём FIELD_ID для поиска записи SettingsTable)
+            $settingsUrl = '/bitrix/admin/my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&FIELD_ID=' . $fieldId . '&action=edit';
             
             return sprintf(
                 '<tr>

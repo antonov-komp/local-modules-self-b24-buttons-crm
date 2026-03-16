@@ -37,7 +37,19 @@ $isPost = $request->isPost() && check_bitrix_sessid();
 
 // Simple routing: edit form vs list
 $id = (int)$request->get('ID');
+$fieldIdParam = (int)$request->get('FIELD_ID');
 $action = (string)$request->get('action');
+
+// Если передан FIELD_ID — ищем запись SettingsTable по FIELD_ID и подставляем ID
+if ($fieldIdParam > 0) {
+    $settingsRow = SettingsTable::getList([
+        'filter' => ['=FIELD_ID' => $fieldIdParam],
+        'limit'  => 1,
+    ])->fetch();
+    if ($settingsRow && !empty($settingsRow['ID'])) {
+        $id = (int)$settingsRow['ID'];
+    }
+}
 
 // ---------------------------------------------------------------------
 // Edit form
@@ -79,6 +91,7 @@ if ($action === 'edit' && $id > 0) {
         $handlerUrl = trim((string)$request->getPost('HANDLER_URL'));
         $title = trim((string)$request->getPost('TITLE'));
         $width = trim((string)$request->getPost('WIDTH'));
+        $buttonText = trim((string)$request->getPost('BUTTON_TEXT'));
         $active = $request->getPost('ACTIVE') === 'Y' ? 'Y' : 'N';
 
         // Minimal URL validation: allow relative or absolute URLs
@@ -96,6 +109,7 @@ if ($action === 'edit' && $id > 0) {
                 'HANDLER_URL' => $handlerUrl !== '' ? $handlerUrl : null,
                 'TITLE'       => $title !== '' ? $title : null,
                 'WIDTH'       => $width !== '' ? $width : null,
+                'BUTTON_TEXT' => $buttonText !== '' ? $buttonText : null,
                 'ACTIVE'      => $active,
                 'UPDATED_AT'  => new \Bitrix\Main\Type\DateTime(),
             ]);
@@ -205,6 +219,17 @@ if ($action === 'edit' && $id > 0) {
             </td>
         </tr>
         <tr>
+            <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_TEXT'); ?>:</td>
+            <td>
+                <input type="text" name="BUTTON_TEXT" size="40"
+                       value="<?= htmlspecialcharsbx((string)($settingsRow['BUTTON_TEXT'] ?? '')); ?>"
+                       title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_TEXT_HINT') ?: ''); ?>">
+                <div style="margin-top: 4px; color: #666; font-size: 11px;">
+                    <?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_TEXT_HINT') ?: ''); ?>
+                </div>
+            </td>
+        </tr>
+        <tr>
             <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_WIDTH'); ?>:</td>
             <td>
                 <input type="text" name="WIDTH" size="10"
@@ -260,14 +285,15 @@ try {
             $fieldId = (int)$uf['ID'];
             if ($fieldId > 0 && !isset($existingSettings[$fieldId])) {
                 SettingsTable::add([
-                    'FIELD_ID'   => $fieldId,
-                    'ENTITY_ID'  => (string)($uf['ENTITY_ID'] ?? null),
-                    'HANDLER_URL'=> null,
-                    'TITLE'      => null,
-                    'WIDTH'      => null,
-                    'ACTIVE'     => 'Y',
-                    'CREATED_AT' => new \Bitrix\Main\Type\DateTime(),
-                    'UPDATED_AT' => new \Bitrix\Main\Type\DateTime(),
+                    'FIELD_ID'    => $fieldId,
+                    'ENTITY_ID'   => (string)($uf['ENTITY_ID'] ?? null),
+                    'HANDLER_URL' => null,
+                    'TITLE'       => null,
+                    'BUTTON_TEXT' => null,
+                    'WIDTH'       => null,
+                    'ACTIVE'      => 'Y',
+                    'CREATED_AT'  => new \Bitrix\Main\Type\DateTime(),
+                    'UPDATED_AT'  => new \Bitrix\Main\Type\DateTime(),
                 ]);
             }
         }
@@ -310,6 +336,14 @@ $findHandlerUrlQuery = (string)($GLOBALS['find_handler_url_query'] ?? '');
 $filter = [];
 $runtime = [];
 
+// Join с UserFieldTable — всегда, для отображения названия поля в колонке «Поле»
+$runtime['UF'] = new Entity\ReferenceField(
+    'UF',
+    UserFieldTable::class,
+    ['=this.FIELD_ID' => 'ref.ID'],
+    ['join_type' => 'left']
+);
+
 if ($findEntityId !== '') {
     $filter['=ENTITY_ID'] = $findEntityId;
 }
@@ -319,13 +353,6 @@ if ($findActive === 'Y' || $findActive === 'N') {
 }
 
 if ($findFieldQuery !== '') {
-    $runtime['UF'] = new Entity\ReferenceField(
-        'UF',
-        UserFieldTable::class,
-        ['=this.FIELD_ID' => 'ref.ID'],
-        ['join_type' => 'left']
-    );
-
     $filter[] = [
         'LOGIC'          => 'OR',
         '%UF.FIELD_NAME' => $findFieldQuery,
@@ -366,14 +393,7 @@ if ($isPost && $moduleRight >= 'W' && isset($_POST['action'])) {
     }
 }
 
-$select = ['ID', 'FIELD_ID', 'ENTITY_ID', 'HANDLER_URL', 'TITLE', 'WIDTH', 'ACTIVE', 'UPDATED_AT'];
-$selectMap = [];
-if (!empty($runtime['UF'])) {
-    $select[] = 'UF_FIELD_NAME';
-    $selectMap = [
-        'UF_FIELD_NAME'      => 'UF.FIELD_NAME',
-    ];
-}
+$select = ['ID', 'FIELD_ID', 'ENTITY_ID', 'HANDLER_URL', 'TITLE', 'WIDTH', 'ACTIVE', 'UPDATED_AT', 'UF.FIELD_NAME'];
 
 $pageSize = (int)$request->get('pageSize');
 if (!in_array($pageSize, [10, 20, 50, 100], true)) {
@@ -386,7 +406,7 @@ if ($page < 1) {
 $offset = ($page - 1) * $pageSize;
 
 $result = SettingsTable::getList([
-    'select'  => array_merge($select, $selectMap),
+    'select'  => $select,
     'filter'  => $filter,
     'runtime' => $runtime,
     'order'   => [$orderField => $orderDir],

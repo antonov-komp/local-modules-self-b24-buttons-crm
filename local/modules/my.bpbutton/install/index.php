@@ -119,6 +119,7 @@ class my_bpbutton extends CModule
                     `ENTITY_ID` VARCHAR(50) NULL,
                     `HANDLER_URL` VARCHAR(500) NULL,
                     `TITLE` VARCHAR(255) NULL,
+                    `BUTTON_TEXT` VARCHAR(255) NULL,
                     `WIDTH` VARCHAR(50) NULL,
                     `ACTIVE` CHAR(1) NOT NULL DEFAULT \'Y\',
                     `CREATED_AT` DATETIME NOT NULL,
@@ -128,6 +129,14 @@ class my_bpbutton extends CModule
                     KEY `IX_BPBTN_ENTITY` (`ENTITY_ID`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;'
             );
+        } else {
+            // Миграция: добавление колонки BUTTON_TEXT для существующих установок
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'BUTTON_TEXT'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `BUTTON_TEXT` VARCHAR(255) NULL AFTER `TITLE`'
+                );
+            }
         }
 
         // Таблица логов

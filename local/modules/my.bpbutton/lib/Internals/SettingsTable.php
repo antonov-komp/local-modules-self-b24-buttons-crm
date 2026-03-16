@@ -49,6 +49,14 @@ class SettingsTable extends Entity\DataManager
                 },
             ]),
 
+            new Entity\StringField('BUTTON_TEXT', [
+                'validation' => static function () {
+                    return [
+                        new Entity\Validator\Length(null, 255),
+                    ];
+                },
+            ]),
+
             new Entity\StringField('WIDTH', [
                 'validation' => static function () {
                     return [

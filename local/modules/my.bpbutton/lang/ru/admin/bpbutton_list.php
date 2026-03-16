@@ -34,6 +34,8 @@ $MESS['MY_BPBUTTON_EDIT_FIELD_FIELD_INFO'] = 'Поле';
 $MESS['MY_BPBUTTON_EDIT_FIELD_ENTITY_ID'] = 'Сущность';
 $MESS['MY_BPBUTTON_EDIT_FIELD_HANDLER_URL'] = 'URL обработчика';
 $MESS['MY_BPBUTTON_EDIT_FIELD_TITLE'] = 'Заголовок окна';
+$MESS['MY_BPBUTTON_EDIT_FIELD_BUTTON_TEXT'] = 'Текст кнопки';
+$MESS['MY_BPBUTTON_EDIT_FIELD_BUTTON_TEXT_HINT'] = 'Текст, отображаемый на кнопке в карточке CRM. Если пусто — используется значение по умолчанию.';
 $MESS['MY_BPBUTTON_EDIT_FIELD_WIDTH'] = 'Ширина';
 $MESS['MY_BPBUTTON_EDIT_FIELD_ACTIVE'] = 'Активно';
 

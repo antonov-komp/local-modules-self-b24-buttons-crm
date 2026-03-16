@@ -13,6 +13,28 @@ use My\BpButton\UserField\BpButtonUserType;
 class EventHandler
 {
     /**
+     * Миграция: добавление колонки BUTTON_TEXT в my_bpbutton_settings для существующих установок.
+     */
+    private static function ensureButtonTextColumnExists(): void
+    {
+        try {
+            $connection = \Bitrix\Main\Application::getConnection();
+            $tableName = 'my_bpbutton_settings';
+            if (!$connection->isTableExists($tableName)) {
+                return;
+            }
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'BUTTON_TEXT'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `BUTTON_TEXT` VARCHAR(255) NULL AFTER `TITLE`'
+                );
+            }
+        } catch (\Throwable $e) {
+            // Игнорируем ошибки миграции
+        }
+    }
+
+    /**
      * Подключение JS для Entity Editor на страницах CRM.
      * Обеспечивает отображение кнопки bp_button_field сразу в режиме просмотра.
      */
@@ -21,6 +43,9 @@ class EventHandler
         if (!Loader::includeModule('my.bpbutton')) {
             return;
         }
+
+        // Миграция: добавление колонки BUTTON_TEXT (один раз при первом обращении)
+        self::ensureButtonTextColumnExists();
         // Подключаем на страницах CRM, админки и настройки полей (config, userfield)
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         $isCrm = stripos($requestUri, '/crm/') !== false || stripos($requestUri, 'crm.') !== false;
@@ -88,14 +113,15 @@ class EventHandler
 
             // Создаём дефолтную запись настроек для поля.
             $addResult = SettingsTable::add([
-                'FIELD_ID'   => $fieldId,
-                'ENTITY_ID'  => (string)($field['ENTITY_ID'] ?? null),
-                'HANDLER_URL'=> null,
-                'TITLE'      => null,
-                'WIDTH'      => null,
-                'ACTIVE'     => 'Y',
-                'CREATED_AT' => new \Bitrix\Main\Type\DateTime(),
-                'UPDATED_AT' => new \Bitrix\Main\Type\DateTime(),
+                'FIELD_ID'    => $fieldId,
+                'ENTITY_ID'   => (string)($field['ENTITY_ID'] ?? null),
+                'HANDLER_URL' => null,
+                'TITLE'       => null,
+                'BUTTON_TEXT' => null,
+                'WIDTH'       => null,
+                'ACTIVE'      => 'Y',
+                'CREATED_AT'  => new \Bitrix\Main\Type\DateTime(),
+                'UPDATED_AT'  => new \Bitrix\Main\Type\DateTime(),
             ]);
 
             // Если не удалось создать запись - логируем, но не прерываем работу ядра
