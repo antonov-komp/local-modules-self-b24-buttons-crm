@@ -57,6 +57,34 @@ class EventHandler
     }
 
     /**
+     * Миграция TASK-014: добавление колонок ACTION_TYPE и BP_TEMPLATE_ID.
+     */
+    private static function ensureBpLaunchColumnsExist(): void
+    {
+        try {
+            $connection = \Bitrix\Main\Application::getConnection();
+            $tableName = 'my_bpbutton_settings';
+            if (!$connection->isTableExists($tableName)) {
+                return;
+            }
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'ACTION_TYPE'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `ACTION_TYPE` VARCHAR(20) NULL DEFAULT \'url\' AFTER `BUTTON_SIZE`'
+                );
+            }
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'BP_TEMPLATE_ID'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `BP_TEMPLATE_ID` INT UNSIGNED NULL AFTER `ACTION_TYPE`'
+                );
+            }
+        } catch (\Throwable $e) {
+            // Игнорируем ошибки миграции
+        }
+    }
+
+    /**
      * Подключение JS для Entity Editor на страницах CRM.
      * Обеспечивает отображение кнопки bp_button_field сразу в режиме просмотра.
      */
@@ -69,6 +97,7 @@ class EventHandler
         // Миграция: добавление колонки BUTTON_TEXT (один раз при первом обращении)
         self::ensureButtonTextColumnExists();
         self::ensureButtonSizeColumnExists();
+        self::ensureBpLaunchColumnsExist();
         // Подключаем на страницах CRM, админки и настройки полей (config, userfield)
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         $isCrm = stripos($requestUri, '/crm/') !== false || stripos($requestUri, 'crm.') !== false;
@@ -134,18 +163,30 @@ class EventHandler
         try {
             $fieldId = (int)$field['ID'];
 
+            $settings = $field['SETTINGS'] ?? [];
+            $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
+            if ($actionType !== 'url' && $actionType !== 'bp_launch') {
+                $actionType = 'url';
+            }
+            $bpTemplateId = isset($settings['BP_TEMPLATE_ID']) ? (int)$settings['BP_TEMPLATE_ID'] : null;
+            if ($bpTemplateId <= 0) {
+                $bpTemplateId = null;
+            }
+
             // Создаём дефолтную запись настроек для поля.
             $addResult = SettingsTable::add([
-                'FIELD_ID'    => $fieldId,
-                'ENTITY_ID'   => (string)($field['ENTITY_ID'] ?? null),
-                'HANDLER_URL' => null,
-                'TITLE'       => null,
-                'BUTTON_TEXT' => null,
-                'WIDTH'       => null,
-                'BUTTON_SIZE' => null,
-                'ACTIVE'      => 'Y',
-                'CREATED_AT'  => new \Bitrix\Main\Type\DateTime(),
-                'UPDATED_AT'  => new \Bitrix\Main\Type\DateTime(),
+                'FIELD_ID'      => $fieldId,
+                'ENTITY_ID'     => (string)($field['ENTITY_ID'] ?? null),
+                'HANDLER_URL'   => null,
+                'TITLE'         => null,
+                'BUTTON_TEXT'   => null,
+                'WIDTH'         => null,
+                'BUTTON_SIZE'   => null,
+                'ACTION_TYPE'   => $actionType,
+                'BP_TEMPLATE_ID'=> $bpTemplateId,
+                'ACTIVE'        => 'Y',
+                'CREATED_AT'    => new \Bitrix\Main\Type\DateTime(),
+                'UPDATED_AT'    => new \Bitrix\Main\Type\DateTime(),
             ]);
 
             // Если не удалось создать запись - логируем, но не прерываем работу ядра
@@ -159,6 +200,59 @@ class EventHandler
         } catch (\Throwable $e) {
             // Ошибки в обработчике событий не должны ломать работу ядра
             SecurityHelper::safeLog($e, 'my.bpbutton', 'EventHandler::onAfterUserFieldAdd');
+        }
+    }
+
+    /**
+     * Синхронизация настроек ACTION_TYPE и BP_TEMPLATE_ID при обновлении поля.
+     *
+     * При сохранении поля через main.field.config.detail данные из SETTINGS
+     * синхронизируются в my_bpbutton_settings.
+     *
+     * @param array $field Обновлённые данные поля (после сохранения)
+     */
+    public static function onAfterUserFieldUpdate(array $field): void
+    {
+        if (
+            empty($field['ID'])
+            || ($field['USER_TYPE_ID'] ?? null) !== BpButtonUserType::USER_TYPE_ID
+        ) {
+            return;
+        }
+
+        if (!Loader::includeModule('my.bpbutton')) {
+            return;
+        }
+
+        try {
+            $fieldId = (int)$field['ID'];
+            $settings = $field['SETTINGS'] ?? [];
+
+            $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
+            if ($actionType !== 'url' && $actionType !== 'bp_launch') {
+                $actionType = 'url';
+            }
+
+            $bpTemplateId = isset($settings['BP_TEMPLATE_ID']) ? (int)$settings['BP_TEMPLATE_ID'] : null;
+            if ($bpTemplateId <= 0) {
+                $bpTemplateId = null;
+            }
+
+            $settingsRow = SettingsTable::getList([
+                'select' => ['ID'],
+                'filter' => ['=FIELD_ID' => $fieldId],
+                'limit' => 1,
+            ])->fetch();
+
+            if ($settingsRow && isset($settingsRow['ID'])) {
+                SettingsTable::update((int)$settingsRow['ID'], [
+                    'ACTION_TYPE' => $actionType,
+                    'BP_TEMPLATE_ID' => $bpTemplateId,
+                    'UPDATED_AT' => new \Bitrix\Main\Type\DateTime(),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            SecurityHelper::safeLog($e, 'my.bpbutton', 'EventHandler::onAfterUserFieldUpdate');
         }
     }
 

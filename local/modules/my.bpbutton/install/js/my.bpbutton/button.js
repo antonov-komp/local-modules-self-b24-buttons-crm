@@ -111,6 +111,14 @@
 			{
 				var data = response.data || {};
 				var ctx = data.context || fallbackContext || {};
+				var actionType = data.actionType || 'url';
+
+				if (actionType === 'bp_launch' && data.bpTemplateId && data.starterConfig)
+				{
+					this.handleBpLaunch(buttonEl, data, ctx);
+					return;
+				}
+
 				var url = data.url || '';
 				var title = (data.title || '');
 				var width = data.width;
@@ -153,6 +161,50 @@
 
 			State.notify(msg);
 			this.logClick(buttonEl, fallbackContext, code, msg);
+		},
+
+		handleBpLaunch: function (buttonEl, data, ctx)
+		{
+			var self = this;
+			var starterConfig = data.starterConfig || {};
+			var bpTemplateId = parseInt(data.bpTemplateId, 10) || 0;
+
+			if (!bpTemplateId || !starterConfig.signedDocumentType || !starterConfig.signedDocumentId)
+			{
+				State.setIdle(buttonEl);
+				State.notify(State.message('MY_BPBTN_ERROR_INTERNAL_ERROR', 'Произошла ошибка. Попробуйте позже или обратитесь к администратору.'));
+				self.logClick(buttonEl, ctx, 'INTERNAL_ERROR', 'Invalid bp_launch config');
+				return;
+			}
+
+			BX.Runtime.loadExtension('bizproc.workflow.starter').then(function (exports)
+			{
+				var Starter = exports.Starter;
+				if (!Starter)
+				{
+					State.setIdle(buttonEl);
+					State.notify(State.message('MY_BPBTN_ERROR_INTERNAL_ERROR', 'Не удалось загрузить модуль запуска БП.'));
+					return;
+				}
+				var starter = new Starter(starterConfig);
+				starter.beginStartWorkflow(bpTemplateId).then(function ()
+				{
+					State.notify(State.message('MY_BPBTN_BP_SUCCESS', 'Бизнес-процесс запущен'));
+					self.logClick(buttonEl, ctx, 'SUCCESS', null);
+				}).catch(function (err)
+				{
+					State.notify(State.message('MY_BPBTN_ERROR_INTERNAL_ERROR', (err && err.message) ? err.message : 'Ошибка запуска БП'));
+					self.logClick(buttonEl, ctx, 'BP_LAUNCH_ERROR', (err && err.message) ? err.message : '');
+				})['finally'](function ()
+				{
+					State.setIdle(buttonEl);
+				});
+			}).catch(function ()
+			{
+				State.setIdle(buttonEl);
+				State.notify(State.message('MY_BPBTN_ERROR_INTERNAL_ERROR', 'Не удалось загрузить модуль запуска БП.'));
+				self.logClick(buttonEl, ctx, 'INTERNAL_ERROR', 'bizproc.workflow.starter load failed');
+			});
 		},
 
 		logClick: function (buttonEl, context, status, messageText)

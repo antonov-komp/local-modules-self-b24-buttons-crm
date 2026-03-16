@@ -57,6 +57,9 @@ $MESS['MY_BPBUTTON_EDIT_SAVE_ERROR'] = 'Ошибка сохранения нас
 
 $MESS['MY_BPBUTTON_EDIT_ERROR_INVALID_WIDTH'] = 'Некорректное значение ширины. Допустимы целые числа или строки с символом %.';
 $MESS['MY_BPBUTTON_EDIT_ERROR_INVALID_URL'] = 'Некорректный формат URL обработчика.';
+$MESS['MY_BPBUTTON_EDIT_ERROR_HANDLER_REQUIRED'] = 'Укажите URL обработчика.';
+$MESS['MY_BPBUTTON_EDIT_ERROR_BP_TEMPLATE_REQUIRED'] = 'Выберите шаблон бизнес-процесса.';
+$MESS['MY_BPBUTTON_EDIT_FIELD_ACTION_TYPE'] = 'Тип действия';
 
 $MESS['MY_BPBUTTON_ADMIN_ACTIVE_HINT_Y'] = 'Кнопка доступна пользователям CRM';
 $MESS['MY_BPBUTTON_ADMIN_ACTIVE_HINT_N'] = 'Кнопка временно отключена';

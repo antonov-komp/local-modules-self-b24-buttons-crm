@@ -37,9 +37,23 @@ class SettingsFormService
     {
         $errors = [];
 
+        $actionType = trim((string)($data['ACTION_TYPE'] ?? ''));
+        if ($actionType !== 'url' && $actionType !== 'bp_launch') {
+            $actionType = 'url';
+        }
+
         $handlerUrl = trim((string)($data['HANDLER_URL'] ?? ''));
-        if ($handlerUrl !== '' && !preg_match('~^https?://~i', $handlerUrl) && ($handlerUrl[0] ?? '') !== '/') {
-            $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_INVALID_URL');
+        if ($actionType === 'url') {
+            if ($handlerUrl === '') {
+                $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_HANDLER_REQUIRED') ?: 'Укажите URL обработчика.';
+            } elseif (!preg_match('~^https?://~i', $handlerUrl) && ($handlerUrl[0] ?? '') !== '/') {
+                $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_INVALID_URL');
+            }
+        }
+
+        $bpTemplateId = isset($data['BP_TEMPLATE_ID']) ? (int)$data['BP_TEMPLATE_ID'] : null;
+        if ($actionType === 'bp_launch' && ($bpTemplateId === null || $bpTemplateId <= 0)) {
+            $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_BP_TEMPLATE_REQUIRED') ?: 'Выберите шаблон бизнес-процесса.';
         }
 
         $width = trim((string)($data['WIDTH'] ?? ''));
@@ -60,7 +74,9 @@ class SettingsFormService
             'valid' => empty($errors),
             'errors' => $errors,
             'normalized' => [
-                'HANDLER_URL' => $handlerUrl !== '' ? $handlerUrl : null,
+                'ACTION_TYPE' => $actionType,
+                'BP_TEMPLATE_ID' => ($actionType === 'bp_launch' && $bpTemplateId > 0) ? $bpTemplateId : null,
+                'HANDLER_URL' => ($actionType === 'url' && $handlerUrl !== '') ? $handlerUrl : null,
                 'TITLE' => $title !== '' ? $title : null,
                 'WIDTH' => $width !== '' ? $width : null,
                 'BUTTON_TEXT' => $buttonText !== '' ? $buttonText : null,
@@ -80,6 +96,8 @@ class SettingsFormService
     public function save(int $id, array $data): UpdateResult
     {
         $updateData = [
+            'ACTION_TYPE' => $data['ACTION_TYPE'] ?? 'url',
+            'BP_TEMPLATE_ID' => $data['BP_TEMPLATE_ID'] ?? null,
             'HANDLER_URL' => $data['HANDLER_URL'],
             'TITLE' => $data['TITLE'],
             'WIDTH' => $data['WIDTH'],

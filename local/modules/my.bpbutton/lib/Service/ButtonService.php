@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace My\BpButton\Service;
 
 use Bitrix\Main\Diag\Debug;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
+use CCrmBizProcHelper;
+use CCrmOwnerType;
 use My\BpButton\Helper\SecurityHelper;
 use My\BpButton\Internals\LogsTable;
 use My\BpButton\Repository\SettingsRepository;
@@ -24,10 +27,9 @@ final class ButtonService
 
     /**
      * @return array{
-     *   url: string,
-     *   title: string,
-     *   width: string|int,
-     *   context: array{settingsId:int, entityId: string, elementId: int, fieldId: int, userId: int}
+     *   success: bool,
+     *   data?: array,
+     *   error?: array{code: string, message: string}
      * }
      */
     public function getSidePanelConfig(string $entityId, int $elementId, int $fieldId, int $userId): array
@@ -40,6 +42,15 @@ final class ButtonService
 
         if (($settings['ACTIVE'] ?? 'N') !== 'Y') {
             return $this->error('BUTTON_INACTIVE', Loc::getMessage('MY_BPBUTTON_SERVICE_BUTTON_INACTIVE') ?: 'Действие недоступно. Кнопка отключена администратором.');
+        }
+
+        $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
+        if ($actionType !== 'url' && $actionType !== 'bp_launch') {
+            $actionType = 'url';
+        }
+
+        if ($actionType === 'bp_launch') {
+            return $this->getBpLaunchConfig($entityId, $elementId, $fieldId, $userId, $settings);
         }
 
         $handlerUrl = trim((string)($settings['HANDLER_URL'] ?? ''));
@@ -70,9 +81,53 @@ final class ButtonService
         return [
             'success' => true,
             'data' => [
+                'actionType' => 'url',
                 'url' => $finalUrl,
                 'title' => $title,
                 'width' => $width,
+                'context' => $context,
+            ],
+        ];
+    }
+
+    /**
+     * Конфигурация для запуска бизнес-процесса (actionType = bp_launch).
+     */
+    private function getBpLaunchConfig(string $entityId, int $elementId, int $fieldId, int $userId, array $settings): array
+    {
+        $templateId = (int)($settings['BP_TEMPLATE_ID'] ?? 0);
+        if ($templateId <= 0) {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_BP_TEMPLATE_NOT_SET') ?: 'Шаблон БП не выбран. Настройте кнопку.');
+        }
+
+        if (!Loader::includeModule('bizproc') || !Loader::includeModule('crm')) {
+            return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_BP_MODULE_REQUIRED') ?: 'Требуется модуль bizproc.');
+        }
+
+        $entityTypeId = CCrmOwnerType::ResolveID($entityId);
+        if ($entityTypeId <= 0) {
+            return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_INVALID_ENTITY') ?: 'Некорректный тип сущности.');
+        }
+
+        $starterConfig = CCrmBizProcHelper::getBpStarterConfig($entityTypeId, $elementId);
+        if (empty($starterConfig['signedDocumentType']) || empty($starterConfig['signedDocumentId'])) {
+            return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_BP_STARTER_FAILED') ?: 'Не удалось подготовить конфигурацию запуска БП.');
+        }
+
+        $context = [
+            'settingsId' => (int)($settings['ID'] ?? 0),
+            'entityId' => $entityId,
+            'elementId' => $elementId,
+            'fieldId' => $fieldId,
+            'userId' => $userId,
+        ];
+
+        return [
+            'success' => true,
+            'data' => [
+                'actionType' => 'bp_launch',
+                'bpTemplateId' => $templateId,
+                'starterConfig' => $starterConfig,
                 'context' => $context,
             ],
         ];

@@ -18,7 +18,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
         '/local/modules/my.bpbutton/install/js/my.bpbutton/button.sidepanel.js',
         '/local/modules/my.bpbutton/install/js/my.bpbutton/button.js',
     ],
-    'rel' => ['main.core', 'ui.buttons', 'ui.sidepanel', 'ui.notification'],
+    'rel' => ['main.core', 'ui.buttons', 'ui.sidepanel', 'ui.notification', 'bizproc.workflow.starter'],
     'lang' => '/local/modules/my.bpbutton/lang/' . LANGUAGE_ID . '/install/js/my.bpbutton/button.php',
 ]);
 

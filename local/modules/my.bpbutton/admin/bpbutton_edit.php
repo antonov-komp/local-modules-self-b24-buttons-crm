@@ -7,6 +7,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UserFieldTable;
 use Bitrix\Main\UI\Extension;
+use My\BpButton\Service\BpTemplateResolver;
 use My\BpButton\Service\EntityNameResolver;
 use My\BpButton\Service\SettingsFormService;
 
@@ -58,6 +59,8 @@ if ($isPost && $isAjax && (isset($_POST['save']) || isset($_POST['apply'])) && $
 
     if ($settingsRow) {
         $postData = [
+            'ACTION_TYPE' => $request->getPost('ACTION_TYPE'),
+            'BP_TEMPLATE_ID' => $request->getPost('BP_TEMPLATE_ID'),
             'HANDLER_URL' => $request->getPost('HANDLER_URL'),
             'TITLE' => $request->getPost('TITLE'),
             'WIDTH' => $request->getPost('WIDTH'),
@@ -128,6 +131,8 @@ $errors = [];
 // Обработка обычного POST
 if ($isPost && (isset($_POST['save']) || isset($_POST['apply']))) {
     $postData = [
+        'ACTION_TYPE' => $request->getPost('ACTION_TYPE'),
+        'BP_TEMPLATE_ID' => $request->getPost('BP_TEMPLATE_ID'),
         'HANDLER_URL' => $request->getPost('HANDLER_URL'),
         'TITLE' => $request->getPost('TITLE'),
         'WIDTH' => $request->getPost('WIDTH'),
@@ -241,12 +246,45 @@ $tabControl = new CAdminTabControl('tabControl', [
         </td>
     </tr>
     <?php endif; ?>
+    <?php
+    $actionType = trim((string)($settingsRow['ACTION_TYPE'] ?? ''));
+    if ($actionType !== 'url' && $actionType !== 'bp_launch') {
+        $actionType = 'url';
+    }
+    $bpTemplateId = (int)($settingsRow['BP_TEMPLATE_ID'] ?? 0);
+    $entityId = trim((string)($settingsRow['ENTITY_ID'] ?? ''));
+    $resolver = new BpTemplateResolver();
+    $bpTemplates = $entityId !== '' ? $resolver->getTemplatesByEntityId($entityId) : [];
+    ?>
+    <tr>
+        <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ACTION_TYPE') ?: 'Тип действия'; ?>:</td>
+        <td>
+            <label><input type="radio" name="ACTION_TYPE" value="url"<?= $actionType === 'url' ? ' checked' : ''; ?>> <?= htmlspecialcharsbx(Loc::getMessage('BPBUTTON_ACTION_TYPE_URL') ?: 'URL обработчика'); ?></label>
+            &nbsp;&nbsp;
+            <label><input type="radio" name="ACTION_TYPE" value="bp_launch"<?= $actionType === 'bp_launch' ? ' checked' : ''; ?>> <?= htmlspecialcharsbx(Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH') ?: 'Запуск бизнес-процесса'); ?></label>
+        </td>
+    </tr>
+    <tr id="bp-template-row" style="<?= $actionType !== 'bp_launch' ? 'display:none;' : ''; ?>">
+        <td><?= Loc::getMessage('BPBUTTON_BP_TEMPLATE_SELECT') ?: 'Шаблон БП'; ?>:</td>
+        <td>
+            <select name="BP_TEMPLATE_ID" style="min-width: 300px;">
+                <option value="">— <?= htmlspecialcharsbx(Loc::getMessage('BPBUTTON_BP_TEMPLATE_SELECT') ?: 'Выберите шаблон БП'); ?> —</option>
+                <?php foreach ($bpTemplates as $tpl): ?>
+                <option value="<?= (int)$tpl['ID']; ?>"<?= $bpTemplateId === (int)$tpl['ID'] ? ' selected' : ''; ?>><?= htmlspecialcharsbx($tpl['NAME'] ?: 'ID ' . $tpl['ID']); ?></option>
+                <?php endforeach; ?>
+            </select>
+            <?php if (empty($bpTemplates) && $entityId !== ''): ?>
+            <div style="margin-top: 4px; color: #828b95; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('BPBUTTON_BP_TEMPLATE_EMPTY') ?: 'Нет шаблонов БП для данной сущности'); ?></div>
+            <?php endif; ?>
+        </td>
+    </tr>
     <tr>
         <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL'); ?>:</td>
         <td>
             <input type="text" name="HANDLER_URL" size="60"
                    value="<?= htmlspecialcharsbx((string)$settingsRow['HANDLER_URL']); ?>"
-                   title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?>">
+                   title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?>"
+                   <?= $actionType === 'bp_launch' ? ' placeholder="' . htmlspecialcharsbx(Loc::getMessage('BPBUTTON_HANDLER_URL_OPTIONAL') ?: 'Не требуется для запуска БП') . '"' : ''; ?>>
             <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?></div>
         </td>
     </tr>
@@ -304,7 +342,21 @@ $tabControl = new CAdminTabControl('tabControl', [
             <span style="margin-left: 6px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ACTIVE_HINT') ?: ''); ?></span>
         </td>
     </tr>
-    <?php
+    <script>
+(function() {
+    var radios = document.querySelectorAll('input[name="ACTION_TYPE"]');
+    var bpRow = document.getElementById('bp-template-row');
+    if (radios.length && bpRow) {
+        function toggle() {
+            var v = document.querySelector('input[name="ACTION_TYPE"]:checked');
+            bpRow.style.display = (v && v.value === 'bp_launch') ? '' : 'none';
+        }
+        radios.forEach(function(r) { r.addEventListener('change', toggle); });
+        toggle();
+    }
+})();
+</script>
+<?php
     $tabControl->Buttons([
         'back_url' => 'my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID,
     ]);

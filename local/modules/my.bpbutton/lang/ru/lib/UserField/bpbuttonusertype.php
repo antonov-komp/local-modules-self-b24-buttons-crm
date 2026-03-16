@@ -18,3 +18,12 @@ $MESS['BPBUTTON_SETTINGS_TITLE'] = 'Заголовок: %s';
 $MESS['BPBUTTON_SETTINGS_ACTIVE'] = 'Активна';
 $MESS['BPBUTTON_SETTINGS_INACTIVE'] = 'Не активна';
 
+$MESS['BPBUTTON_ACTION_TYPE_LABEL'] = 'Тип действия';
+$MESS['BPBUTTON_ACTION_TYPE_URL'] = 'URL обработчика';
+$MESS['BPBUTTON_ACTION_TYPE_BP_LAUNCH'] = 'Запуск бизнес-процесса';
+$MESS['BPBUTTON_BP_TEMPLATE_SELECT'] = 'Выберите шаблон БП';
+$MESS['BPBUTTON_BP_TEMPLATE_EMPTY'] = 'Нет шаблонов БП для данной сущности';
+$MESS['BPBUTTON_BP_TEMPLATE_SELECT_HINT'] = 'Шаблоны отображаются для типа сущности, к которому привязано поле.';
+$MESS['BPBUTTON_BP_MODULE_REQUIRED'] = 'Требуется модуль bizproc';
+$MESS['BPBUTTON_HANDLER_URL_OPTIONAL'] = 'Не требуется для запуска БП';
+

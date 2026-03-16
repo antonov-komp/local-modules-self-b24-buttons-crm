@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace My\BpButton\UserField;
 
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use My\BpButton\Internals\SettingsTable;
+use My\BpButton\Service\BpTemplateResolver;
 use My\BpButton\Service\SettingsResolver;
 use My\BpButton\UserField\ButtonHtmlRenderer;
 
@@ -180,13 +182,9 @@ class BpButtonUserType
     public static function getSettingsHTML(array $field, string $htmlControlName, array $additional): string
     {
         $fieldId = (int)($field['ID'] ?? 0);
+        $baseName = is_array($htmlControlName) ? ($htmlControlName['NAME'] ?? 'settings') : $htmlControlName;
 
         if ($fieldId > 0) {
-            $settingsUrl = '/bitrix/admin/my_bpbutton_bpbutton_edit.php?lang=' . LANGUAGE_ID . '&FIELD_ID=' . $fieldId;
-            $buttonLabel = Loc::getMessage('BPBUTTON_SETTINGS_BUTTON_LABEL') ?: 'Настроить кнопку';
-            $buttonTitle = Loc::getMessage('BPBUTTON_SETTINGS_BUTTON_TITLE') ?: 'Открыть страницу настроек';
-            $description = Loc::getMessage('BPBUTTON_SETTINGS_DESCRIPTION') ?: 'Настройте URL обработчика, заголовок и другие параметры.';
-
             $settingsRow = null;
             try {
                 $settingsRow = SettingsTable::getList([
@@ -196,6 +194,19 @@ class BpButtonUserType
             } catch (\Throwable $e) {
                 // Игнорируем ошибки БД
             }
+
+            $actionType = (string)($settingsRow['ACTION_TYPE'] ?? $field['SETTINGS']['ACTION_TYPE'] ?? 'url');
+            if ($actionType !== 'bp_launch') {
+                $actionType = 'url';
+            }
+            $bpTemplateId = (int)($settingsRow['BP_TEMPLATE_ID'] ?? $field['SETTINGS']['BP_TEMPLATE_ID'] ?? 0);
+
+            $subtypeHtml = self::renderSubtypeBlock($baseName, $actionType, $bpTemplateId, $field, $additional);
+
+            $settingsUrl = '/bitrix/admin/my_bpbutton_bpbutton_edit.php?lang=' . LANGUAGE_ID . '&FIELD_ID=' . $fieldId;
+            $buttonLabel = Loc::getMessage('BPBUTTON_SETTINGS_BUTTON_LABEL') ?: 'Настроить кнопку';
+            $buttonTitle = Loc::getMessage('BPBUTTON_SETTINGS_BUTTON_TITLE') ?: 'Открыть страницу настроек';
+            $description = Loc::getMessage('BPBUTTON_SETTINGS_DESCRIPTION') ?: 'Настройте URL обработчика, заголовок и другие параметры.';
 
             $summaryHtml = '';
             if ($settingsRow) {
@@ -212,7 +223,12 @@ class BpButtonUserType
 
                 $summaryHtml = '<div style="margin-top: 12px; padding: 10px; background: #f9f9f9; border-radius: 4px; font-size: 12px;">';
                 $summaryHtml .= '<div style="font-weight: 600; margin-bottom: 6px;">' . htmlspecialcharsbx($currentLabel) . '</div>';
-                $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx(sprintf($urlLabel, $url ?: '—')) . '</div>';
+                if ($actionType === 'bp_launch') {
+                    $bpLabel = Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH') ?: 'Запуск бизнес-процесса';
+                    $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx($bpLabel) . '</div>';
+                } else {
+                    $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx(sprintf($urlLabel, $url ?: '—')) . '</div>';
+                }
                 $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx(sprintf($titleLabel, $title ?: '—')) . '</div>';
                 $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx($activeText) . '</div>';
                 $summaryHtml .= '</div>';
@@ -221,7 +237,7 @@ class BpButtonUserType
                 $summaryHtml = '<div style="margin-top: 12px; color: #828b95; font-size: 12px;">' . htmlspecialcharsbx($notConfigured) . '</div>';
             }
 
-            return sprintf(
+            return $subtypeHtml . sprintf(
                 '<tr>
                     <td colspan="2">
                         <div style="margin: 10px 0;">
@@ -244,6 +260,54 @@ class BpButtonUserType
     }
 
     /**
+     * Блок выбора подтипа (URL / Запуск БП) и выбора шаблона БП.
+     */
+    private static function renderSubtypeBlock(string $baseName, string $actionType, int $bpTemplateId, array $field, array $additional): string
+    {
+        $entityId = trim((string)($field['ENTITY_ID'] ?? $additional['ENTITY_ID'] ?? ''));
+        $showBpLaunch = Loader::includeModule('bizproc') && Loader::includeModule('crm');
+
+        $actionTypeUrl = Loc::getMessage('BPBUTTON_ACTION_TYPE_URL') ?: 'URL обработчика';
+        $actionTypeBpLaunch = Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH') ?: 'Запуск бизнес-процесса';
+        $selectLabel = Loc::getMessage('BPBUTTON_BP_TEMPLATE_SELECT') ?: 'Выберите шаблон БП';
+        $emptyLabel = Loc::getMessage('BPBUTTON_BP_TEMPLATE_EMPTY') ?: 'Нет шаблонов БП для данной сущности';
+        $hintLabel = Loc::getMessage('BPBUTTON_BP_TEMPLATE_SELECT_HINT') ?: 'Шаблоны отображаются для типа сущности, к которому привязано поле.';
+
+        $nameUrl = $baseName . '[ACTION_TYPE]';
+        $nameBp = $baseName . '[ACTION_TYPE]';
+        $nameTemplate = $baseName . '[BP_TEMPLATE_ID]';
+
+        $html = '<tr><td width="40%">' . (Loc::getMessage('BPBUTTON_ACTION_TYPE_LABEL') ?: 'Тип действия') . ':</td><td width="60%">';
+        $html .= '<label><input type="radio" name="' . htmlspecialcharsbx($nameUrl) . '" value="url"' . ($actionType === 'url' ? ' checked' : '') . '> ' . htmlspecialcharsbx($actionTypeUrl) . '</label>';
+        if ($showBpLaunch) {
+            $html .= ' &nbsp; <label><input type="radio" name="' . htmlspecialcharsbx($nameBp) . '" value="bp_launch"' . ($actionType === 'bp_launch' ? ' checked' : '') . '> ' . htmlspecialcharsbx($actionTypeBpLaunch) . '</label>';
+        } else {
+            $html .= ' <span style="color: #828b95; font-size: 11px;">(' . (Loc::getMessage('BPBUTTON_BP_MODULE_REQUIRED') ?: 'Требуется модуль bizproc') . ')</span>';
+        }
+        $html .= '</td></tr>';
+
+        if ($showBpLaunch && $actionType === 'bp_launch') {
+            $resolver = new BpTemplateResolver();
+            $templates = $entityId !== '' ? $resolver->getTemplatesByEntityId($entityId) : [];
+
+            $html .= '<tr><td>' . htmlspecialcharsbx($selectLabel) . ':</td><td>';
+            $html .= '<select name="' . htmlspecialcharsbx($nameTemplate) . '" style="min-width: 250px;">';
+            $html .= '<option value="">— ' . htmlspecialcharsbx($selectLabel) . ' —</option>';
+            foreach ($templates as $tpl) {
+                $html .= '<option value="' . (int)$tpl['ID'] . '"' . ($bpTemplateId === (int)$tpl['ID'] ? ' selected' : '') . '>' . htmlspecialcharsbx($tpl['NAME'] ?: 'ID ' . $tpl['ID']) . '</option>';
+            }
+            $html .= '</select>';
+            if (empty($templates) && $entityId !== '') {
+                $html .= '<div style="margin-top: 4px; color: #828b95; font-size: 11px;">' . htmlspecialcharsbx($emptyLabel) . '</div>';
+            }
+            $html .= '<div style="margin-top: 4px; color: #666; font-size: 11px;">' . htmlspecialcharsbx($hintLabel) . '</div>';
+            $html .= '</td></tr>';
+        }
+
+        return $html;
+    }
+
+    /**
      * Подготовка настроек поля перед сохранением.
      *
      * Bitrix24 передает только один параметр - массив $field,
@@ -255,11 +319,21 @@ class BpButtonUserType
      */
     public static function prepareSettings(array $field): array
     {
-        // Извлекаем настройки из поля, если они есть
         $settings = $field['SETTINGS'] ?? [];
-        
-        // Возвращаем настройки как есть, без изменений.
-        return is_array($settings) ? $settings : [];
+        if (!is_array($settings)) {
+            return [];
+        }
+
+        $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
+        if ($actionType !== 'url' && $actionType !== 'bp_launch') {
+            $actionType = 'url';
+        }
+        $settings['ACTION_TYPE'] = $actionType;
+
+        $bpTemplateId = isset($settings['BP_TEMPLATE_ID']) ? (int)$settings['BP_TEMPLATE_ID'] : null;
+        $settings['BP_TEMPLATE_ID'] = $bpTemplateId > 0 ? $bpTemplateId : null;
+
+        return $settings;
     }
 
     /**

@@ -109,6 +109,7 @@ class my_bpbutton extends CModule
             'My\\BpButton\\Service\\SettingsFormService' => 'lib/Service/SettingsFormService.php',
             'My\\BpButton\\Controller\\ButtonController' => 'lib/Controller/ButtonController.php',
             'My\\BpButton\\Helper\\SecurityHelper' => 'lib/Helper/SecurityHelper.php',
+            'My\\BpButton\\Service\\BpTemplateResolver' => 'lib/Service/BpTemplateResolver.php',
         ]);
 
         $connection = Application::getConnection();
@@ -127,6 +128,8 @@ class my_bpbutton extends CModule
                     `BUTTON_TEXT` VARCHAR(255) NULL,
                     `WIDTH` VARCHAR(50) NULL,
                     `BUTTON_SIZE` VARCHAR(20) NULL,
+                    `ACTION_TYPE` VARCHAR(20) NULL DEFAULT \'url\',
+                    `BP_TEMPLATE_ID` INT UNSIGNED NULL,
                     `ACTIVE` CHAR(1) NOT NULL DEFAULT \'Y\',
                     `CREATED_AT` DATETIME NOT NULL,
                     `UPDATED_AT` DATETIME NOT NULL,
@@ -148,6 +151,19 @@ class my_bpbutton extends CModule
             if (!$result->fetch()) {
                 $connection->queryExecute(
                     'ALTER TABLE `' . $tableName . '` ADD COLUMN `BUTTON_SIZE` VARCHAR(20) NULL AFTER `WIDTH`'
+                );
+            }
+            // Миграция TASK-014: ACTION_TYPE и BP_TEMPLATE_ID
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'ACTION_TYPE'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `ACTION_TYPE` VARCHAR(20) NULL DEFAULT \'url\' AFTER `BUTTON_SIZE`'
+                );
+            }
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'BP_TEMPLATE_ID'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `BP_TEMPLATE_ID` INT UNSIGNED NULL AFTER `ACTION_TYPE`'
                 );
             }
         }
@@ -245,6 +261,14 @@ class my_bpbutton extends CModule
             \My\BpButton\EventHandler::class,
             'onUserFieldDelete'
         );
+
+        RegisterModuleDependences(
+            'main',
+            'OnAfterUserFieldUpdate',
+            $this->MODULE_ID,
+            \My\BpButton\EventHandler::class,
+            'onAfterUserFieldUpdate'
+        );
     }
 
     /**
@@ -282,6 +306,14 @@ class my_bpbutton extends CModule
             $this->MODULE_ID,
             \My\BpButton\EventHandler::class,
             'onUserFieldDelete'
+        );
+
+        UnRegisterModuleDependences(
+            'main',
+            'OnAfterUserFieldUpdate',
+            $this->MODULE_ID,
+            \My\BpButton\EventHandler::class,
+            'onAfterUserFieldUpdate'
         );
     }
 
@@ -349,7 +381,7 @@ class my_bpbutton extends CModule
                 '/local/modules/my.bpbutton/install/js/my.bpbutton/button.sidepanel.js',
                 '/local/modules/my.bpbutton/install/js/my.bpbutton/button.js',
             ],
-            'rel' => ['main.core', 'ui.buttons', 'ui.sidepanel', 'ui.notification'],
+            'rel' => ['main.core', 'ui.buttons', 'ui.sidepanel', 'ui.notification', 'bizproc.workflow.starter'],
             'lang' => '/local/modules/my.bpbutton/lang/' . LANGUAGE_ID . '/install/js/my.bpbutton/button.php',
         ]);
 
