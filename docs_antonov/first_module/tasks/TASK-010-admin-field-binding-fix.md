@@ -141,3 +141,4 @@
 ## История правок
 
 - 2026-03-16: Создана задача на основе ANALYSIS-010-admin-field-binding.md.
+- 2026-03-16: Добавлено поле «Размер кнопки» (BUTTON_SIZE) и уточнено поле «Ширина» — см. TASK-011-button-size-and-width-clarification.md.

@@ -65,6 +65,14 @@ class SettingsTable extends Entity\DataManager
                 },
             ]),
 
+            new Entity\StringField('BUTTON_SIZE', [
+                'validation' => static function () {
+                    return [
+                        new Entity\Validator\Length(null, 20),
+                    ];
+                },
+            ]),
+
             new Entity\BooleanField('ACTIVE', [
                 'values'  => ['N', 'Y'],
                 'default' => 'Y',

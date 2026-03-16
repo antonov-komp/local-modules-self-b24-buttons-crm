@@ -121,6 +121,7 @@ class my_bpbutton extends CModule
                     `TITLE` VARCHAR(255) NULL,
                     `BUTTON_TEXT` VARCHAR(255) NULL,
                     `WIDTH` VARCHAR(50) NULL,
+                    `BUTTON_SIZE` VARCHAR(20) NULL,
                     `ACTIVE` CHAR(1) NOT NULL DEFAULT \'Y\',
                     `CREATED_AT` DATETIME NOT NULL,
                     `UPDATED_AT` DATETIME NOT NULL,
@@ -135,6 +136,13 @@ class my_bpbutton extends CModule
             if (!$result->fetch()) {
                 $connection->queryExecute(
                     'ALTER TABLE `' . $tableName . '` ADD COLUMN `BUTTON_TEXT` VARCHAR(255) NULL AFTER `TITLE`'
+                );
+            }
+            // Миграция: добавление колонки BUTTON_SIZE
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'BUTTON_SIZE'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `BUTTON_SIZE` VARCHAR(20) NULL AFTER `WIDTH`'
                 );
             }
         }

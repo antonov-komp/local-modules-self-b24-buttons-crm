@@ -76,9 +76,13 @@
 		return fallback || '';
 	}
 
+	/**
+	 * Преобразует width в число (пиксели) для BX.SidePanel.
+	 * SidePanel принимает только number; проценты (80%) конвертируем в пиксели.
+	 */
 	function parseWidth(width)
 	{
-		if (typeof width === 'number')
+		if (typeof width === 'number' && width > 0)
 		{
 			return width;
 		}
@@ -94,12 +98,24 @@
 			return undefined;
 		}
 
+		// Только цифры — пиксели
 		if (/^\d+$/.test(w))
 		{
 			return parseInt(w, 10);
 		}
 
-		return w;
+		// Проценты (например 80%) — конвертируем в пиксели
+		var percentMatch = w.match(/^(\d+)\s*%$/);
+		if (percentMatch)
+		{
+			var percent = parseInt(percentMatch[1], 10);
+			if (percent > 0 && percent <= 100 && typeof window !== 'undefined' && window.innerWidth)
+			{
+				return Math.floor(window.innerWidth * (percent / 100));
+			}
+		}
+
+		return undefined;
 	}
 
 	function ensureContextUrl(url, context)
@@ -277,6 +293,7 @@
 				url: self.getConfigUrl(),
 				method: 'POST',
 				dataType: 'json',
+				cache: false,
 				data: {
 					entityId: entityId,
 					elementId: elementId,

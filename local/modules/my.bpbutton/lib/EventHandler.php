@@ -35,6 +35,28 @@ class EventHandler
     }
 
     /**
+     * Миграция: добавление колонки BUTTON_SIZE в my_bpbutton_settings.
+     */
+    private static function ensureButtonSizeColumnExists(): void
+    {
+        try {
+            $connection = \Bitrix\Main\Application::getConnection();
+            $tableName = 'my_bpbutton_settings';
+            if (!$connection->isTableExists($tableName)) {
+                return;
+            }
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'BUTTON_SIZE'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `BUTTON_SIZE` VARCHAR(20) NULL AFTER `WIDTH`'
+                );
+            }
+        } catch (\Throwable $e) {
+            // Игнорируем ошибки миграции
+        }
+    }
+
+    /**
      * Подключение JS для Entity Editor на страницах CRM.
      * Обеспечивает отображение кнопки bp_button_field сразу в режиме просмотра.
      */
@@ -46,6 +68,7 @@ class EventHandler
 
         // Миграция: добавление колонки BUTTON_TEXT (один раз при первом обращении)
         self::ensureButtonTextColumnExists();
+        self::ensureButtonSizeColumnExists();
         // Подключаем на страницах CRM, админки и настройки полей (config, userfield)
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         $isCrm = stripos($requestUri, '/crm/') !== false || stripos($requestUri, 'crm.') !== false;
@@ -119,6 +142,7 @@ class EventHandler
                 'TITLE'       => null,
                 'BUTTON_TEXT' => null,
                 'WIDTH'       => null,
+                'BUTTON_SIZE' => null,
                 'ACTIVE'      => 'Y',
                 'CREATED_AT'  => new \Bitrix\Main\Type\DateTime(),
                 'UPDATED_AT'  => new \Bitrix\Main\Type\DateTime(),

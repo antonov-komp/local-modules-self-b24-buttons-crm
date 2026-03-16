@@ -55,13 +55,72 @@ if ($fieldIdParam > 0) {
 // Edit form
 // ---------------------------------------------------------------------
 if ($action === 'edit' && $id > 0) {
-    // Подключение JS для SidePanel, если форма открывается в панели
+    $isAjax = $request->get('IFRAME') === 'Y' && $request->get('IFRAME_TYPE') === 'SIDE_SLIDER';
+
+    // Обработка POST для AJAX — ДО вывода HTML, иначе JSON будет испорчен
+    if ($isPost && $isAjax && (isset($_POST['save']) || isset($_POST['apply'])) && $moduleRight >= 'W') {
+        $postId = (int)($request->getPost('ID') ?: $id);
+        $settingsRow = $postId > 0 ? SettingsTable::getByPrimary($postId)->fetch() : null;
+        if ($settingsRow) {
+            $handlerUrl = trim((string)$request->getPost('HANDLER_URL'));
+            $title = trim((string)$request->getPost('TITLE'));
+            $width = trim((string)$request->getPost('WIDTH'));
+            $buttonText = trim((string)$request->getPost('BUTTON_TEXT'));
+            $buttonSize = trim((string)$request->getPost('BUTTON_SIZE'));
+            $active = $request->getPost('ACTIVE') === 'Y' ? 'Y' : 'N';
+
+            $errors = [];
+            if ($handlerUrl !== '' && !preg_match('~^https?://~i', $handlerUrl) && $handlerUrl[0] !== '/') {
+                $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_INVALID_URL');
+            }
+            if ($width !== '' && !preg_match('~^\d+$~', $width) && !preg_match('~^\d+%$~', $width)) {
+                $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_INVALID_WIDTH');
+            }
+            $allowedSizes = ['default', 'sm', 'lg'];
+            if ($buttonSize !== '' && !in_array($buttonSize, $allowedSizes, true)) {
+                $buttonSize = 'default';
+            }
+
+            if (empty($errors)) {
+                $updateResult = SettingsTable::update($postId, [
+                    'HANDLER_URL' => $handlerUrl !== '' ? $handlerUrl : null,
+                    'TITLE'       => $title !== '' ? $title : null,
+                    'WIDTH'       => $width !== '' ? $width : null,
+                    'BUTTON_TEXT' => $buttonText !== '' ? $buttonText : null,
+                    'BUTTON_SIZE' => $buttonSize !== '' ? $buttonSize : null,
+                    'ACTIVE'      => $active,
+                    'UPDATED_AT'  => new \Bitrix\Main\Type\DateTime(),
+                ]);
+
+                if ($updateResult->isSuccess()) {
+                    header('Content-Type: application/json; charset=' . SITE_CHARSET);
+                    echo json_encode([
+                        'status'     => 'success',
+                        'formParams' => ['ID' => $postId, 'action' => 'edit'],
+                    ]);
+                    return;
+                }
+                $errors[] = implode("\n", $updateResult->getErrorMessages());
+            }
+
+            if (!empty($errors)) {
+                header('Content-Type: application/json; charset=' . SITE_CHARSET);
+                echo json_encode([
+                    'status'  => 'error',
+                    'message' => implode("\n", $errors),
+                ]);
+                return;
+            }
+        }
+    }
+
+    // Подключение JS для SidePanel
     $isSidePanel = $request->get('IFRAME') === 'Y' || $request->get('IFRAME_TYPE') === 'SIDE_SLIDER';
     if ($isSidePanel && class_exists(Extension::class)) {
         Extension::load('ui.sidepanel');
         Extension::load('ui.notification');
     }
-    
+
     require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
 
     if ($moduleRight < 'W') {
@@ -92,11 +151,16 @@ if ($action === 'edit' && $id > 0) {
         $title = trim((string)$request->getPost('TITLE'));
         $width = trim((string)$request->getPost('WIDTH'));
         $buttonText = trim((string)$request->getPost('BUTTON_TEXT'));
+        $buttonSize = trim((string)$request->getPost('BUTTON_SIZE'));
         $active = $request->getPost('ACTIVE') === 'Y' ? 'Y' : 'N';
 
         // Minimal URL validation: allow relative or absolute URLs
         if ($handlerUrl !== '' && !preg_match('~^https?://~i', $handlerUrl) && $handlerUrl[0] !== '/') {
             $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_INVALID_URL');
+        }
+        $allowedSizes = ['default', 'sm', 'lg'];
+        if ($buttonSize !== '' && !in_array($buttonSize, $allowedSizes, true)) {
+            $buttonSize = 'default';
         }
 
         // Width validation: integer or number%
@@ -110,16 +174,14 @@ if ($action === 'edit' && $id > 0) {
                 'TITLE'       => $title !== '' ? $title : null,
                 'WIDTH'       => $width !== '' ? $width : null,
                 'BUTTON_TEXT' => $buttonText !== '' ? $buttonText : null,
+                'BUTTON_SIZE' => $buttonSize !== '' ? $buttonSize : null,
                 'ACTIVE'      => $active,
                 'UPDATED_AT'  => new \Bitrix\Main\Type\DateTime(),
             ]);
 
             if ($updateResult->isSuccess()) {
-                // Проверяем, открыта ли форма в SidePanel
                 $isSidePanel = $request->get('IFRAME') === 'Y' || $request->get('IFRAME_TYPE') === 'SIDE_SLIDER';
-                
                 if ($isSidePanel) {
-                    // В SidePanel показываем уведомление и закрываем панель через JS
                     ?>
                     <script>
                         if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
@@ -138,13 +200,11 @@ if ($action === 'edit' && $id > 0) {
                         }
                     </script>
                     <?php
-                    // Показываем сообщение для пользователей без JS
                     CAdminMessage::ShowMessage([
                         'MESSAGE' => Loc::getMessage('MY_BPBUTTON_EDIT_SAVE_SUCCESS'),
                         'TYPE'    => 'OK',
                     ]);
                 } else {
-                    // Обычный редирект для полной страницы
                     CAdminMessage::ShowMessage([
                         'MESSAGE' => Loc::getMessage('MY_BPBUTTON_EDIT_SAVE_SUCCESS'),
                         'TYPE'    => 'OK',
@@ -208,14 +268,18 @@ if ($action === 'edit' && $id > 0) {
             <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL'); ?>:</td>
             <td>
                 <input type="text" name="HANDLER_URL" size="60"
-                       value="<?= htmlspecialcharsbx((string)$settingsRow['HANDLER_URL']); ?>">
+                       value="<?= htmlspecialcharsbx((string)$settingsRow['HANDLER_URL']); ?>"
+                       title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?>">
+                <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?></div>
             </td>
         </tr>
         <tr>
             <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_TITLE'); ?>:</td>
             <td>
                 <input type="text" name="TITLE" size="40"
-                       value="<?= htmlspecialcharsbx((string)$settingsRow['TITLE']); ?>">
+                       value="<?= htmlspecialcharsbx((string)$settingsRow['TITLE']); ?>"
+                       title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_TITLE_HINT') ?: ''); ?>">
+                <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_TITLE_HINT') ?: ''); ?></div>
             </td>
         </tr>
         <tr>
@@ -233,13 +297,34 @@ if ($action === 'edit' && $id > 0) {
             <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_WIDTH'); ?>:</td>
             <td>
                 <input type="text" name="WIDTH" size="10"
-                       value="<?= htmlspecialcharsbx((string)$settingsRow['WIDTH']); ?>">
+                       value="<?= htmlspecialcharsbx((string)$settingsRow['WIDTH']); ?>"
+                       title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_WIDTH_HINT') ?: ''); ?>">
+                <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_WIDTH_HINT') ?: ''); ?></div>
+            </td>
+        </tr>
+        <tr>
+            <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE'); ?>:</td>
+            <td>
+                <?php
+                $currentSize = (string)($settingsRow['BUTTON_SIZE'] ?? '');
+                if (!in_array($currentSize, ['sm', 'lg'], true)) {
+                    $currentSize = 'default';
+                }
+                ?>
+                <select name="BUTTON_SIZE" title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_HINT') ?: ''); ?>">
+                    <option value="default"<?= $currentSize === 'default' ? ' selected' : ''; ?>><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_DEFAULT') ?: 'Стандартная'); ?></option>
+                    <option value="sm"<?= $currentSize === 'sm' ? ' selected' : ''; ?>><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_SM') ?: 'Маленькая'); ?></option>
+                    <option value="lg"<?= $currentSize === 'lg' ? ' selected' : ''; ?>><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_LG') ?: 'Большая'); ?></option>
+                </select>
+                <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_HINT') ?: ''); ?></div>
             </td>
         </tr>
         <tr>
             <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ACTIVE'); ?>:</td>
             <td>
-                <input type="checkbox" name="ACTIVE" value="Y"<?= $settingsRow['ACTIVE'] === 'Y' ? ' checked' : ''; ?>>
+                <input type="checkbox" name="ACTIVE" value="Y"<?= $settingsRow['ACTIVE'] === 'Y' ? ' checked' : ''; ?>
+                       title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ACTIVE_HINT') ?: ''); ?>">
+                <span style="margin-left: 6px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ACTIVE_HINT') ?: ''); ?></span>
             </td>
         </tr>
         <?php
@@ -291,6 +376,7 @@ try {
                     'TITLE'       => null,
                     'BUTTON_TEXT' => null,
                     'WIDTH'       => null,
+                    'BUTTON_SIZE' => null,
                     'ACTIVE'      => 'Y',
                     'CREATED_AT'  => new \Bitrix\Main\Type\DateTime(),
                     'UPDATED_AT'  => new \Bitrix\Main\Type\DateTime(),

@@ -163,6 +163,39 @@ class BpButtonUserType
     }
 
     /**
+     * Получение размера кнопки для поля.
+     * Берёт BUTTON_SIZE из настроек: default, sm, lg.
+     *
+     * @param array $field
+     * @return string
+     */
+    protected static function getButtonSizeForField(array $field): string
+    {
+        static $settingsCache = [];
+
+        $fieldId = (int)($field['ID'] ?? 0);
+        if ($fieldId <= 0) {
+            return 'default';
+        }
+
+        if (!isset($settingsCache[$fieldId])) {
+            try {
+                $settingsRow = SettingsTable::getList([
+                    'select' => ['BUTTON_SIZE'],
+                    'filter' => ['=FIELD_ID' => $fieldId],
+                    'limit'  => 1,
+                ])->fetch();
+                $size = $settingsRow ? trim((string)($settingsRow['BUTTON_SIZE'] ?? '')) : '';
+                $settingsCache[$fieldId] = in_array($size, ['sm', 'lg'], true) ? $size : 'default';
+            } catch (\Throwable $e) {
+                $settingsCache[$fieldId] = 'default';
+            }
+        }
+
+        return $settingsCache[$fieldId];
+    }
+
+    /**
      * Публичное представление поля в карточке CRM — кнопка Bitrix UI.
      *
      * @param array       $field
@@ -206,6 +239,15 @@ class BpButtonUserType
 
         // Текст кнопки: из настроек (BUTTON_TEXT) или fallback на языковые файлы
         $buttonText = static::getButtonTextForField($field);
+
+        // Размер кнопки: из настроек (BUTTON_SIZE)
+        $buttonSize = static::getButtonSizeForField($field);
+        $sizeStyle = '';
+        if ($buttonSize === 'sm') {
+            $sizeStyle = 'padding: 4px 12px; font-size: 12px;';
+        } elseif ($buttonSize === 'lg') {
+            $sizeStyle = 'padding: 12px 28px; font-size: 16px;';
+        }
 
         // Получаем ID сущности из поля или из дополнительных параметров
         $entityId = (string)($field['ENTITY_ID'] ?? $additional['ENTITY_ID'] ?? '');
@@ -262,6 +304,9 @@ class BpButtonUserType
             'data-field-id="' . htmlspecialcharsbx($fieldId) . '"',
             'data-user-id="' . htmlspecialcharsbx($userId) . '"',
         ];
+        if ($sizeStyle !== '') {
+            $attributes[] = 'style="' . htmlspecialcharsbx($sizeStyle) . '"';
+        }
 
         // Подключаем расширения и добавляем скрипт инициализации
         $initScript = '';
