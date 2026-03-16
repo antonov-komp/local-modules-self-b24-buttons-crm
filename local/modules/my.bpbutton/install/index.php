@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
+use Bitrix\Main\IO\Directory;
+use Bitrix\Main\IO\File;
 
 Loc::loadMessages(__FILE__);
 
@@ -15,20 +17,89 @@ class my_bpbutton extends CModule
     public $MODULE_VERSION_DATE = '2026-03-16 00:00:00';
     public $MODULE_NAME;
     public $MODULE_DESCRIPTION;
+    public $PARTNER_NAME;
+    public $PARTNER_URI;
 
     public function __construct()
     {
-        $this->MODULE_NAME = 'BP Button Field';
-        $this->MODULE_DESCRIPTION = 'Пользовательский тип поля bp_button_field для CRM и смарт‑процессов.';
+        $arModuleVersion = [];
+        include __DIR__ . '/version.php';
+
+        $this->MODULE_VERSION = $arModuleVersion['VERSION'] ?? '0.0.1';
+        $this->MODULE_VERSION_DATE = $arModuleVersion['VERSION_DATE'] ?? '2026-03-16 00:00:00';
+        $this->MODULE_NAME = Loc::getMessage('MY_BPBUTTON_INSTALL_NAME') ?: 'BP Button Field';
+        $this->MODULE_DESCRIPTION = Loc::getMessage('MY_BPBUTTON_INSTALL_DESCRIPTION') ?: 'Пользовательский тип поля bp_button_field для CRM и смарт‑процессов.';
+        $this->PARTNER_NAME = Loc::getMessage('MY_BPBUTTON_INSTALL_PARTNER_NAME') ?: '';
+        $this->PARTNER_URI = Loc::getMessage('MY_BPBUTTON_INSTALL_PARTNER_URI') ?: '';
     }
 
     public function DoInstall()
     {
         Loader::includeModule('main');
 
-        $connection = Application::getConnection();
-        $tableName = 'my_bpbutton_settings';
+        // 1. Регистрация модуля
+        RegisterModule($this->MODULE_ID);
 
+        // 2. Создание таблиц БД
+        $this->InstallDB();
+
+        // 3. Регистрация обработчиков событий
+        $this->InstallEvents();
+
+        // 4. Установка admin-прокси файлов
+        $this->InstallFiles();
+
+        // 5. Регистрация JS/CSS расширений
+        $this->InstallJS();
+
+        // 6. Регистрация admin-меню
+        $this->InstallMenu();
+
+        return true;
+    }
+
+    public function DoUninstall()
+    {
+        global $APPLICATION;
+
+        // Проверка прав доступа
+        if (!check_bitrix_sessid()) {
+            return false;
+        }
+
+        // Опционально: мастер удаления с выбором политики по таблицам
+        // По умолчанию: удаляем настройки, оставляем логи (исторические данные)
+        $deleteSettings = $_REQUEST['delete_settings'] ?? 'Y';
+        $deleteLogs = $_REQUEST['delete_logs'] ?? 'N';
+
+        // 1. Снятие обработчиков событий
+        $this->UnInstallEvents();
+
+        // 2. Удаление admin-файлов
+        $this->UnInstallFiles();
+
+        // 3. Удаление admin-меню
+        $this->UnInstallMenu();
+
+        // 4. Обработка таблиц БД (согласно политике)
+        $this->UnInstallDB($deleteSettings === 'Y', $deleteLogs === 'Y');
+
+        // 5. Разрегистрация модуля
+        UnRegisterModule($this->MODULE_ID);
+
+        return true;
+    }
+
+    /**
+     * Создание таблиц БД
+     */
+    protected function InstallDB(): void
+    {
+        $connection = Application::getConnection();
+        $sqlHelper = $connection->getSqlHelper();
+
+        // Таблица настроек
+        $tableName = 'my_bpbutton_settings';
         if (!$connection->isTableExists($tableName)) {
             $connection->queryExecute(
                 'CREATE TABLE IF NOT EXISTS `' . $tableName . '` (
@@ -48,6 +119,7 @@ class my_bpbutton extends CModule
             );
         }
 
+        // Таблица логов
         $logsTableName = 'my_bpbutton_logs';
         if (!$connection->isTableExists($logsTableName)) {
             $connection->queryExecute(
@@ -68,18 +140,43 @@ class my_bpbutton extends CModule
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;'
             );
         }
-
-        RegisterModule($this->MODULE_ID);
-        $this->InstallEvents();
     }
 
-    public function DoUninstall()
+    /**
+     * Удаление таблиц БД (с политикой)
+     *
+     * Политика по умолчанию:
+     * - my_bpbutton_settings — удаляется (настройки не критичны для истории)
+     * - my_bpbutton_logs — остаётся (исторические данные могут быть ценны для аудита)
+     *
+     * @param bool $deleteSettings Удалять ли таблицу настроек
+     * @param bool $deleteLogs Удалять ли таблицу логов
+     */
+    protected function UnInstallDB(bool $deleteSettings = true, bool $deleteLogs = false): void
     {
-        $this->UnInstallEvents();
-        UnRegisterModule($this->MODULE_ID);
+        $connection = Application::getConnection();
+
+        // Удаление таблицы настроек (по умолчанию удаляем)
+        if ($deleteSettings) {
+            $tableName = 'my_bpbutton_settings';
+            if ($connection->isTableExists($tableName)) {
+                $connection->queryExecute('DROP TABLE IF EXISTS `' . $tableName . '`');
+            }
+        }
+
+        // Удаление таблицы логов (по умолчанию оставляем)
+        if ($deleteLogs) {
+            $logsTableName = 'my_bpbutton_logs';
+            if ($connection->isTableExists($logsTableName)) {
+                $connection->queryExecute('DROP TABLE IF EXISTS `' . $logsTableName . '`');
+            }
+        }
     }
 
-    public function InstallEvents()
+    /**
+     * Регистрация обработчиков событий
+     */
+    public function InstallEvents(): void
     {
         RegisterModuleDependences(
             'main',
@@ -106,7 +203,10 @@ class my_bpbutton extends CModule
         );
     }
 
-    public function UnInstallEvents()
+    /**
+     * Снятие обработчиков событий
+     */
+    public function UnInstallEvents(): void
     {
         UnRegisterModuleDependences(
             'main',
@@ -131,6 +231,93 @@ class my_bpbutton extends CModule
             \My\BpButton\EventHandler::class,
             'onUserFieldDelete'
         );
+    }
+
+    /**
+     * Установка admin-прокси файлов
+     */
+    public function InstallFiles(): void
+    {
+        $adminDir = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin';
+        $installAdminDir = __DIR__ . '/admin';
+
+        // Проверяем существование прокси файлов в install/admin/
+        $proxyListPath = $installAdminDir . '/my_bpbutton_bpbutton_list.php';
+        if (!File::isFileExists($proxyListPath)) {
+            // Создаём директорию для прокси, если её нет
+            if (!Directory::isDirectoryExists($installAdminDir)) {
+                Directory::createDirectory($installAdminDir);
+            }
+
+            // Создаём прокси для списка настроек
+            $proxyListContent = "<?php\nrequire_once(\$_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/my.bpbutton/admin/bpbutton_list.php');\n";
+            $proxyListFile = new File($proxyListPath);
+            $proxyListFile->putContents($proxyListContent);
+        }
+
+        // Копируем прокси в /bitrix/admin/
+        if (File::isFileExists($proxyListPath)) {
+            CopyDirFiles($installAdminDir, $adminDir, true, true);
+        }
+    }
+
+    /**
+     * Удаление admin-прокси файлов
+     */
+    public function UnInstallFiles(): void
+    {
+        $adminDir = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin';
+
+        // Удаляем прокси файлы
+        $proxyFiles = [
+            'my_bpbutton_bpbutton_list.php',
+        ];
+
+        foreach ($proxyFiles as $file) {
+            $filePath = $adminDir . '/' . $file;
+            if (File::isFileExists($filePath)) {
+                File::deleteFile($filePath);
+            }
+        }
+    }
+
+    /**
+     * Регистрация JS/CSS расширений
+     */
+    public function InstallJS(): void
+    {
+        // Регистрация JS-расширения для кнопки в CRM
+        CJSCore::RegisterExt('my_bpbutton.button', [
+            'js' => '/local/modules/my.bpbutton/install/js/my.bpbutton/button.js',
+            'rel' => ['main.core', 'ui.buttons', 'ui.sidepanel', 'ui.notification'],
+            'lang' => '/local/modules/my.bpbutton/lang/' . LANGUAGE_ID . '/install/js/my.bpbutton/button.php',
+        ]);
+
+        // Регистрация JS-расширения для админ-списка
+        CJSCore::RegisterExt('my_bpbutton.admin_list', [
+            'js' => '/local/modules/my.bpbutton/install/js/my.bpbutton/admin.list.js',
+            'rel' => ['main.core', 'ui.notification', 'ui.sidepanel'],
+            'lang' => '/local/modules/my.bpbutton/lang/' . LANGUAGE_ID . '/install/js/my.bpbutton/admin.list.php',
+        ]);
+    }
+
+    /**
+     * Регистрация admin-меню
+     */
+    public function InstallMenu(): void
+    {
+        // Меню регистрируется автоматически через admin/menu.php
+        // Bitrix автоматически подхватывает файлы из admin/menu.php модулей
+        // Дополнительных действий не требуется
+    }
+
+    /**
+     * Удаление admin-меню
+     */
+    public function UnInstallMenu(): void
+    {
+        // Меню удаляется автоматически при удалении модуля
+        // Дополнительных действий не требуется
     }
 }
 

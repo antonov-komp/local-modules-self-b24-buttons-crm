@@ -7,6 +7,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UserFieldTable;
 use Bitrix\Main\Entity;
+use Bitrix\Main\UI\Extension;
 use My\BpButton\Internals\SettingsTable;
 use My\BpButton\UserField\BpButtonUserType;
 
@@ -42,6 +43,13 @@ $action = (string)$request->get('action');
 // Edit form
 // ---------------------------------------------------------------------
 if ($action === 'edit' && $id > 0) {
+    // Подключение JS для SidePanel, если форма открывается в панели
+    $isSidePanel = $request->get('IFRAME') === 'Y' || $request->get('IFRAME_TYPE') === 'SIDE_SLIDER';
+    if ($isSidePanel && class_exists(Extension::class)) {
+        Extension::load('ui.sidepanel');
+        Extension::load('ui.notification');
+    }
+    
     require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
 
     if ($moduleRight < 'W') {
@@ -93,15 +101,46 @@ if ($action === 'edit' && $id > 0) {
             ]);
 
             if ($updateResult->isSuccess()) {
-                CAdminMessage::ShowMessage([
-                    'MESSAGE' => Loc::getMessage('MY_BPBUTTON_EDIT_SAVE_SUCCESS'),
-                    'TYPE'    => 'OK',
-                ]);
-
-                if (isset($_POST['save'])) {
-                    LocalRedirect('my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID);
+                // Проверяем, открыта ли форма в SidePanel
+                $isSidePanel = $request->get('IFRAME') === 'Y' || $request->get('IFRAME_TYPE') === 'SIDE_SLIDER';
+                
+                if ($isSidePanel) {
+                    // В SidePanel показываем уведомление и закрываем панель через JS
+                    ?>
+                    <script>
+                        if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
+                            BX.UI.Notification.Center.notify({
+                                content: <?= CUtil::PhpToJSObject(Loc::getMessage('MY_BPBUTTON_EDIT_SAVE_SUCCESS')) ?>,
+                                autoHideDelay: 3000,
+                            });
+                        }
+                        if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance) {
+                            setTimeout(function() {
+                                BX.SidePanel.Instance.close();
+                                if (window.top && window.top.location) {
+                                    window.top.location.reload();
+                                }
+                            }, 500);
+                        }
+                    </script>
+                    <?php
+                    // Показываем сообщение для пользователей без JS
+                    CAdminMessage::ShowMessage([
+                        'MESSAGE' => Loc::getMessage('MY_BPBUTTON_EDIT_SAVE_SUCCESS'),
+                        'TYPE'    => 'OK',
+                    ]);
                 } else {
-                    LocalRedirect('my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&action=edit&ID=' . $id);
+                    // Обычный редирект для полной страницы
+                    CAdminMessage::ShowMessage([
+                        'MESSAGE' => Loc::getMessage('MY_BPBUTTON_EDIT_SAVE_SUCCESS'),
+                        'TYPE'    => 'OK',
+                    ]);
+
+                    if (isset($_POST['save'])) {
+                        LocalRedirect('my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID);
+                    } else {
+                        LocalRedirect('my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&action=edit&ID=' . $id);
+                    }
                 }
             } else {
                 $errors[] = implode("\n", $updateResult->getErrorMessages());
@@ -373,7 +412,9 @@ $lAdmin->AddHeaders([
 ]);
 
 while ($row = $result->fetch()) {
-    $listRow = $lAdmin->AddRow((string)$row['ID'], $row, 'my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&action=edit&ID=' . (int)$row['ID'], Loc::getMessage('MY_BPBUTTON_LIST_EDIT_TITLE'));
+    // Ссылка для открытия в SidePanel (если используется)
+    $editUrl = 'my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&action=edit&ID=' . (int)$row['ID'];
+    $listRow = $lAdmin->AddRow((string)$row['ID'], $row, $editUrl, Loc::getMessage('MY_BPBUTTON_LIST_EDIT_TITLE'));
 
     $fieldLabelParts = [];
     if (!empty($row['UF_FIELD_NAME'])) {
@@ -386,31 +427,75 @@ while ($row = $result->fetch()) {
     $listRow->AddViewField('FIELD', htmlspecialcharsbx($fieldLabel));
     $listRow->AddViewField('ENTITY_ID', htmlspecialcharsbx((string)$row['ENTITY_ID']));
 
+        // HANDLER_URL с тултипом
     $handlerUrl = (string)$row['HANDLER_URL'];
     if ($handlerUrl !== '' && mb_strlen($handlerUrl) > 60) {
         $short = mb_substr($handlerUrl, 0, 57) . '...';
-        $handlerHtml = '<span title="' . htmlspecialcharsbx($handlerUrl) . '">' . htmlspecialcharsbx($short) . '</span>';
+        $handlerHtml = '<span title="' . htmlspecialcharsbx($handlerUrl) . '" class="js-bpbutton-handler-url">' . htmlspecialcharsbx($short) . '</span>';
     } else {
-        $handlerHtml = htmlspecialcharsbx($handlerUrl);
+        $handlerHtml = '<span class="js-bpbutton-handler-url" title="' . htmlspecialcharsbx($handlerUrl) . '">' . htmlspecialcharsbx($handlerUrl) . '</span>';
     }
     $listRow->AddViewField('HANDLER_URL', $handlerHtml);
 
     $listRow->AddViewField('TITLE', htmlspecialcharsbx((string)$row['TITLE']));
-    $listRow->AddViewField('WIDTH', htmlspecialcharsbx((string)$row['WIDTH']));
 
-    $activeHtml = $row['ACTIVE'] === 'Y'
-        ? '<span style="color: green;">' . Loc::getMessage('MY_BPBUTTON_LIST_ACTIVE_Y') . '</span>'
-        : '<span style="color: gray;">' . Loc::getMessage('MY_BPBUTTON_LIST_ACTIVE_N') . '</span>';
-    $listRow->AddViewField('ACTIVE', $activeHtml);
+    // WIDTH с тултипом
+    $width = (string)$row['WIDTH'];
+    $widthHint = '';
+    if ($width !== '') {
+        if (mb_strpos($width, '%') !== false) {
+            $widthHint = Loc::getMessage('MY_BPBUTTON_ADMIN_WIDTH_HINT_PERCENT') ?: 'Проценты от ширины экрана/SidePanel';
+        } elseif (preg_match('/^\d+$/', $width)) {
+            $widthHint = Loc::getMessage('MY_BPBUTTON_ADMIN_WIDTH_HINT_PIXELS') ?: 'Пиксели';
+        }
+    }
+    $widthHtml = '<span class="js-bpbutton-width-cell" data-width="' . htmlspecialcharsbx($width) . '"';
+    if ($widthHint !== '') {
+        $widthHtml .= ' title="' . htmlspecialcharsbx($widthHint) . '"';
+    }
+    $widthHtml .= '>' . htmlspecialcharsbx($width) . '</span>';
+    $listRow->AddViewField('WIDTH', $widthHtml);
+
+    // ACTIVE с inline-переключателем
+    $activeValue = $row['ACTIVE'] === 'Y' ? 'Y' : 'N';
+    $activeText = $activeValue === 'Y'
+        ? Loc::getMessage('MY_BPBUTTON_LIST_ACTIVE_Y')
+        : Loc::getMessage('MY_BPBUTTON_LIST_ACTIVE_N');
+    $activeHint = $activeValue === 'Y'
+        ? (Loc::getMessage('MY_BPBUTTON_ADMIN_ACTIVE_HINT_Y') ?: 'Кнопка доступна пользователям CRM')
+        : (Loc::getMessage('MY_BPBUTTON_ADMIN_ACTIVE_HINT_N') ?: 'Кнопка временно отключена');
+
+    if ($moduleRight >= 'W') {
+        // Inline-переключатель для администраторов
+        $activeIcon = $activeValue === 'Y' ? '✓' : '✗';
+        $activeColor = $activeValue === 'Y' ? 'green' : 'gray';
+        $activeHtml = '<button type="button" class="ui-btn ui-btn-link js-bpbutton-active-toggle" '
+            . 'data-id="' . (int)$row['ID'] . '" '
+            . 'data-active="' . htmlspecialcharsbx($activeValue) . '" '
+            . 'title="' . htmlspecialcharsbx($activeHint) . '" '
+            . 'style="border: none; background: none; padding: 0; cursor: pointer; color: ' . $activeColor . ';">'
+            . '<span style="margin-right: 4px;">' . htmlspecialcharsbx($activeIcon) . '</span>'
+            . '<span class="js-bpbutton-active-text">' . htmlspecialcharsbx($activeText) . '</span>'
+            . '</button>';
+    } else {
+        // Только отображение для пользователей без прав на запись
+        $activeColor = $activeValue === 'Y' ? 'green' : 'gray';
+        $activeHtml = '<span style="color: ' . $activeColor . ';" title="' . htmlspecialcharsbx($activeHint) . '">'
+            . htmlspecialcharsbx($activeText)
+            . '</span>';
+    }
+    $listRow->AddViewField('ACTIVE', '<span class="js-bpbutton-active-cell">' . $activeHtml . '</span>');
 
     $listRow->AddViewField('UPDATED_AT', htmlspecialcharsbx((string)$row['UPDATED_AT']));
 
     $actions = [];
     if ($moduleRight >= 'W') {
+        $editUrl = 'my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&action=edit&ID=' . (int)$row['ID'];
+        // Используем SidePanel для открытия формы редактирования
         $actions[] = [
             'ICON'    => 'edit',
             'TEXT'    => Loc::getMessage('MY_BPBUTTON_LIST_EDIT_TITLE'),
-            'ACTION'  => $lAdmin->ActionRedirect('my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&action=edit&ID=' . (int)$row['ID']),
+            'ACTION'  => "BX.SidePanel && BX.SidePanel.Instance ? BX.SidePanel.Instance.open('" . CUtil::JSEscape($editUrl) . "', {width: '60%', cacheable: false, allowChangeHistory: true}) : window.location.href='" . CUtil::JSEscape($editUrl) . "';",
             'DEFAULT' => true,
         ];
         $actions[] = [
@@ -527,6 +612,11 @@ if ($pageCount > 1) {
 }
 
 $lAdmin->CheckListMode();
+
+// Подключение JS-расширения для админ-списка
+if (class_exists(Extension::class)) {
+    Extension::load('my_bpbutton.admin_list');
+}
 
 echo $navHtml;
 $lAdmin->DisplayList();

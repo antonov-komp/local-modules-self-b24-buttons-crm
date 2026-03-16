@@ -9,6 +9,7 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
+use My\BpButton\Helper\SecurityHelper;
 use My\BpButton\Service\ButtonService;
 
 Loc::loadMessages(__FILE__);
@@ -83,6 +84,9 @@ final class ButtonController extends Controller
 
             return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
         } catch (SystemException $e) {
+            // Безопасное логирование исключения (без чувствительных данных)
+            SecurityHelper::safeLog($e, 'my.bpbutton', 'ButtonController::getConfigAction');
+            
             if (Loader::includeModule('my.bpbutton')) {
                 (new ButtonService())->logClick(
                     [
@@ -92,11 +96,14 @@ final class ButtonController extends Controller
                         'userId' => $userId,
                     ],
                     'INTERNAL_ERROR',
-                    $e->getMessage()
+                    'Внутренняя ошибка при получении конфигурации'
                 );
             }
             return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
         } catch (\Throwable $e) {
+            // Безопасное логирование исключения (без чувствительных данных)
+            SecurityHelper::safeLog($e, 'my.bpbutton', 'ButtonController::getConfigAction');
+            
             if (Loader::includeModule('my.bpbutton')) {
                 (new ButtonService())->logClick(
                     [
@@ -106,7 +113,7 @@ final class ButtonController extends Controller
                         'userId' => $userId,
                     ],
                     'INTERNAL_ERROR',
-                    $e->getMessage()
+                    'Внутренняя ошибка при получении конфигурации'
                 );
             }
             return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));

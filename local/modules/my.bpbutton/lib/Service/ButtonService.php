@@ -7,6 +7,7 @@ namespace My\BpButton\Service;
 use Bitrix\Main\Diag\Debug;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
+use My\BpButton\Helper\SecurityHelper;
 use My\BpButton\Internals\LogsTable;
 use My\BpButton\Internals\SettingsTable;
 
@@ -122,13 +123,12 @@ final class ButtonService
             ]);
         } catch (\Throwable $e) {
             // Логирование не должно ломать основной сценарий. Фиксируем только в техлог.
-            if (function_exists('AddMessage2Log')) {
-                AddMessage2Log(
-                    'my.bpbutton logClick failed: ' . $e->getMessage(),
-                    'my.bpbutton'
-                );
-            } else {
-                Debug::writeToFile($e->getMessage(), 'my.bpbutton logClick failed', 'my_bpbutton.log');
+            // Используем безопасное логирование для предотвращения утечки чувствительных данных
+            SecurityHelper::safeLog($e, 'my.bpbutton', 'ButtonService::logClick');
+            
+            // Дополнительное логирование через Debug (если доступно)
+            if (class_exists(Debug::class)) {
+                SecurityHelper::safeDebugLog($e, 'my.bpbutton logClick failed', 'my_bpbutton.log', 'ButtonService::logClick');
             }
         }
     }
@@ -168,6 +168,15 @@ final class ButtonService
         ];
     }
 
+    /**
+     * Очистка сообщения для логирования от чувствительных данных
+     * 
+     * Маскирует токены, пароли, секреты и другие чувствительные данные
+     * перед записью в бизнес-логи (my_bpbutton_logs)
+     * 
+     * @param string|null $message Исходное сообщение
+     * @return string|null Очищенное сообщение или null
+     */
     private function sanitizeLogMessage(?string $message): ?string
     {
         $message = trim((string)($message ?? ''));
@@ -175,10 +184,28 @@ final class ButtonService
             return null;
         }
 
-        // Убираем потенциально чувствительные query-параметры (минимальный безопасный фильтр).
-        $message = preg_replace('~([?&](?:auth|token|access_token|refresh_token|password|secret)=)[^&\s]+~iu', '$1***', $message) ?: $message;
+        // Убираем потенциально чувствительные query-параметры
+        $sensitiveParams = [
+            'auth', 'token', 'access_token', 'refresh_token', 'password', 'secret',
+            'key', 'api_key', 'apikey', 'session', 'sessid', 'sid',
+            'credentials', 'credential', 'passwd', 'pwd'
+        ];
+        $pattern = '~([?&](' . implode('|', $sensitiveParams) . ')=)[^&\s]+~iu';
+        $message = preg_replace($pattern, '$1***', $message) ?: $message;
 
-        // Ограничиваем размер, чтобы не раздувать логи.
+        // Убираем полные URL с параметрами авторизации
+        $message = preg_replace('~https?://[^\s]+(?:token|password|secret|key|auth)=[^\s]+~iu', '[URL_WITH_CREDENTIALS]', $message);
+
+        // Убираем email-адреса (оставляем только домен)
+        $message = preg_replace('~\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b~u', '[EMAIL]', $message);
+
+        // Убираем номера телефонов (оставляем только формат)
+        $message = preg_replace('~\b\+?\d{1,3}[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}\b~u', '[PHONE]', $message);
+
+        // Убираем полные пути к файлам (оставляем только имя файла)
+        $message = preg_replace('~(/[^\s:]+/)([^/\s]+\.(?:php|js|html|htm))~u', '$2', $message);
+
+        // Ограничиваем размер, чтобы не раздувать логи
         $message = mb_substr($message, 0, 1000);
 
         return $message;

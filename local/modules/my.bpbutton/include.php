@@ -16,6 +16,13 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
     'lang' => '/local/modules/my.bpbutton/lang/' . LANGUAGE_ID . '/install/js/my.bpbutton/button.php',
 ]);
 
+// Регистрация JS-расширения для админ-списка.
+\CJSCore::RegisterExt('my_bpbutton.admin_list', [
+    'js' => '/local/modules/my.bpbutton/install/js/my.bpbutton/admin.list.js',
+    'rel' => ['main.core', 'ui.notification', 'ui.sidepanel'],
+    'lang' => '/local/modules/my.bpbutton/lang/' . LANGUAGE_ID . '/install/js/my.bpbutton/admin.list.php',
+]);
+
 // Сервисный include для совместимости: в ряде окружений Loader::includeModule() может ожидать true.
 return Loader::includeModule('main');
 
