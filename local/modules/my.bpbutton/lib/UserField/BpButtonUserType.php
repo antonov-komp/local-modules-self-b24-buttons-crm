@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace My\BpButton\UserField;
 
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\UI\Extension;
-use Bitrix\Main\UserTable;
-use My\BpButton\Internals\SettingsTable;
+use My\BpButton\Service\SettingsResolver;
+use My\BpButton\UserField\ButtonHtmlRenderer;
 
 Loc::loadMessages(__FILE__);
 
@@ -121,81 +120,6 @@ class BpButtonUserType
     }
 
     /**
-     * Получение текста кнопки для поля.
-     * Берёт BUTTON_TEXT из настроек (SettingsTable), при отсутствии — из языковых файлов.
-     * Кеширует настройки по FIELD_ID в рамках одного запроса.
-     *
-     * @param array $field
-     * @return string
-     */
-    protected static function getButtonTextForField(array $field): string
-    {
-        static $settingsCache = [];
-
-        $fieldId = (int)($field['ID'] ?? 0);
-        if ($fieldId <= 0) {
-            return Loc::getMessage('BPBUTTON_USER_TYPE_BUTTON_TEXT')
-                ?: Loc::getMessage('BPBUTTON_USER_TYPE_NAME')
-                ?: 'Кнопка';
-        }
-
-        if (!isset($settingsCache[$fieldId])) {
-            try {
-                $settingsRow = SettingsTable::getList([
-                    'select' => ['BUTTON_TEXT'],
-                    'filter' => ['=FIELD_ID' => $fieldId],
-                    'limit'  => 1,
-                ])->fetch();
-                $settingsCache[$fieldId] = $settingsRow ? trim((string)($settingsRow['BUTTON_TEXT'] ?? '')) : '';
-            } catch (\Throwable $e) {
-                $settingsCache[$fieldId] = '';
-            }
-        }
-
-        $buttonText = $settingsCache[$fieldId];
-        if ($buttonText !== '') {
-            return $buttonText;
-        }
-
-        return Loc::getMessage('BPBUTTON_USER_TYPE_BUTTON_TEXT')
-            ?: Loc::getMessage('BPBUTTON_USER_TYPE_NAME')
-            ?: 'Кнопка';
-    }
-
-    /**
-     * Получение размера кнопки для поля.
-     * Берёт BUTTON_SIZE из настроек: default, sm, lg.
-     *
-     * @param array $field
-     * @return string
-     */
-    protected static function getButtonSizeForField(array $field): string
-    {
-        static $settingsCache = [];
-
-        $fieldId = (int)($field['ID'] ?? 0);
-        if ($fieldId <= 0) {
-            return 'default';
-        }
-
-        if (!isset($settingsCache[$fieldId])) {
-            try {
-                $settingsRow = SettingsTable::getList([
-                    'select' => ['BUTTON_SIZE'],
-                    'filter' => ['=FIELD_ID' => $fieldId],
-                    'limit'  => 1,
-                ])->fetch();
-                $size = $settingsRow ? trim((string)($settingsRow['BUTTON_SIZE'] ?? '')) : '';
-                $settingsCache[$fieldId] = in_array($size, ['sm', 'lg'], true) ? $size : 'default';
-            } catch (\Throwable $e) {
-                $settingsCache[$fieldId] = 'default';
-            }
-        }
-
-        return $settingsCache[$fieldId];
-    }
-
-    /**
      * Публичное представление поля в карточке CRM — кнопка Bitrix UI.
      *
      * @param array       $field
@@ -206,152 +130,8 @@ class BpButtonUserType
      */
     public static function getPublicViewHTML(array $field, ?array $value = null, array $additional = []): string
     {
-        // Нормализуем параметры - Bitrix24 может передавать их в разных форматах
-        // VIEW_CALLBACK передает только $field и $additional, без $value
-        if ($value === null) {
-            // Если значение не передано, пытаемся получить его из поля
-            if (isset($field['VALUE'])) {
-                if (is_array($field['VALUE'])) {
-                    $value = ['VALUE' => reset($field['VALUE'])];
-                } else {
-                    $value = ['VALUE' => $field['VALUE']];
-                }
-            } else {
-                $value = [];
-            }
-        }
-        if (!is_array($additional)) {
-            $additional = [];
-        }
-        if (!is_array($field)) {
-            $field = [];
-        }
-        
-        // Подключаем стандартные UI‑стили и JS-логику кнопки только там, где реально отрисовано поле.
-        if (class_exists(Extension::class)) {
-            try {
-                Extension::load('ui.buttons');
-                Extension::load('my_bpbutton.button');
-            } catch (\Exception $e) {
-                // Игнорируем ошибки загрузки расширений
-            }
-        }
-
-        // Текст кнопки: из настроек (BUTTON_TEXT) или fallback на языковые файлы
-        $buttonText = static::getButtonTextForField($field);
-
-        // Размер кнопки: из настроек (BUTTON_SIZE)
-        $buttonSize = static::getButtonSizeForField($field);
-        $sizeStyle = '';
-        if ($buttonSize === 'sm') {
-            $sizeStyle = 'padding: 4px 12px; font-size: 12px;';
-        } elseif ($buttonSize === 'lg') {
-            $sizeStyle = 'padding: 12px 28px; font-size: 16px;';
-        }
-
-        // Получаем ID сущности из поля или из дополнительных параметров
-        $entityId = (string)($field['ENTITY_ID'] ?? $additional['ENTITY_ID'] ?? '');
-        $fieldId = (string)($field['ID'] ?? '');
-        
-        // Получаем ID элемента из разных источников
-        $elementId = '';
-        if (!empty($additional['ELEMENT_ID'])) {
-            $elementId = (string)$additional['ELEMENT_ID'];
-        } elseif (!empty($additional['VALUE'])) {
-            $elementId = (string)$additional['VALUE'];
-        } elseif (!empty($row['ID'] ?? null)) {
-            $elementId = (string)$row['ID'];
-        } elseif (!empty($_REQUEST['ID'])) {
-            $elementId = (string)$_REQUEST['ID'];
-        } elseif (!empty($GLOBALS['APPLICATION']->GetCurPageParam())) {
-            // Пытаемся извлечь ID из URL
-            $url = $GLOBALS['APPLICATION']->GetCurPageParam();
-            if (preg_match('/[?&]ID=(\d+)/', $url, $matches)) {
-                $elementId = $matches[1];
-            }
-        }
-        
-        $userId = '';
-
-        // Получаем ID пользователя
-        if (is_array($additional['USER'] ?? null) && isset($additional['USER']['ID'])) {
-            $userId = (string)$additional['USER']['ID'];
-        } elseif (isset($GLOBALS['USER']) && $GLOBALS['USER'] instanceof \CUser) {
-            $userId = (string)$GLOBALS['USER']->GetID();
-        } else {
-            try {
-                $user = UserTable::getList([
-                    'select' => ['ID'],
-                    'limit' => 1,
-                ])->fetch();
-
-                if ($user && isset($user['ID'])) {
-                    $userId = (string)$user['ID'];
-                }
-            } catch (\Exception $e) {
-                // Игнорируем ошибки получения пользователя
-            }
-        }
-
-        // Формируем HTML кнопки
-        $buttonId = 'bpbutton_' . uniqid();
-        $attributes = [
-            'type="button"',
-            'id="' . htmlspecialcharsbx($buttonId) . '"',
-            'class="ui-btn ui-btn-primary js-bpbutton-field"',
-            'data-editor-control-type="button"',
-            'data-entity-id="' . htmlspecialcharsbx($entityId) . '"',
-            'data-element-id="' . htmlspecialcharsbx($elementId) . '"',
-            'data-field-id="' . htmlspecialcharsbx($fieldId) . '"',
-            'data-user-id="' . htmlspecialcharsbx($userId) . '"',
-        ];
-        if ($sizeStyle !== '') {
-            $attributes[] = 'style="' . htmlspecialcharsbx($sizeStyle) . '"';
-        }
-
-        // Подключаем расширения и добавляем скрипт инициализации
-        $initScript = '';
-        if (class_exists(Extension::class)) {
-            try {
-                Extension::load('ui.buttons');
-                Extension::load('my_bpbutton.button');
-                
-                // Скрипт для инициализации кнопки
-                $initScript = '<script>
-                    (function() {
-                        function initButton() {
-                            if (typeof BX === "undefined" || !BX.MyBpButton || !BX.MyBpButton.Button) {
-                                setTimeout(initButton, 100);
-                                return;
-                            }
-                            var button = document.getElementById("' . htmlspecialcharsbx($buttonId) . '");
-                            if (button && !button.dataset.bpbuttonInit) {
-                                BX.MyBpButton.Button.bind(button);
-                            }
-                        }
-                        if (typeof BX !== "undefined" && BX.ready) {
-                            BX.ready(initButton);
-                        } else {
-                            setTimeout(initButton, 100);
-                        }
-                    })();
-                </script>';
-            } catch (\Exception $e) {
-                // Игнорируем ошибки
-            }
-        }
-
-        // Формируем HTML кнопки
-        $html = sprintf(
-            '<div class="bpbutton-field-wrapper" data-field-type="bp_button_field">
-                <button %s>%s</button>
-            </div>%s',
-            implode(' ', $attributes),
-            htmlspecialcharsbx($buttonText),
-            $initScript
-        );
-        
-        return $html;
+        $renderer = new ButtonHtmlRenderer(new SettingsResolver());
+        return $renderer->render($field, $value, $additional ?? []);
     }
 
     /**

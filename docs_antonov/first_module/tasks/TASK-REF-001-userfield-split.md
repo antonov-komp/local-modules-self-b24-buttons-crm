@@ -1,7 +1,7 @@
 # TASK-REF-001: Разделение BpButtonUserType (UserField-слой)
 
 **Дата создания:** 2026-03-16 (UTC+3, Брест)  
-**Статус:** Новая  
+**Статус:** Завершена  
 **Приоритет:** Высокий  
 **Исполнитель:** Bitrix24 Программист (коробка, D7)  
 **Связь с планом:** REFACTOR-PLAN-001-five-stages.md, Этап 1
@@ -394,3 +394,4 @@ public static function getPublicViewHTML(array $field, ?array $value = null, arr
 ## История правок
 
 - 2026-03-16: Создан документ задачи TASK-REF-001 на основе REFACTOR-PLAN-001.
+- 2026-03-16: Рефакторинг выполнен: созданы SettingsResolver, ButtonHtmlRenderer; BpButtonUserType сокращён до ~288 строк.

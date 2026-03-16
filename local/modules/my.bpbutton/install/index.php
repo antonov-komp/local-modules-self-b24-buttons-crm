@@ -98,10 +98,12 @@ class my_bpbutton extends CModule
         // Регистрация автозагрузчика классов
         Loader::registerAutoLoadClasses($this->MODULE_ID, [
             'My\\BpButton\\UserField\\BpButtonUserType' => 'lib/UserField/BpButtonUserType.php',
+            'My\\BpButton\\UserField\\ButtonHtmlRenderer' => 'lib/UserField/ButtonHtmlRenderer.php',
             'My\\BpButton\\EventHandler' => 'lib/EventHandler.php',
             'My\\BpButton\\Internals\\SettingsTable' => 'lib/Internals/SettingsTable.php',
             'My\\BpButton\\Internals\\LogsTable' => 'lib/Internals/LogsTable.php',
             'My\\BpButton\\Service\\ButtonService' => 'lib/Service/ButtonService.php',
+            'My\\BpButton\\Service\\SettingsResolver' => 'lib/Service/SettingsResolver.php',
             'My\\BpButton\\Controller\\ButtonController' => 'lib/Controller/ButtonController.php',
             'My\\BpButton\\Helper\\SecurityHelper' => 'lib/Helper/SecurityHelper.php',
         ]);
