@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
 
 Loc::loadMessages(__FILE__);
 
@@ -22,6 +24,30 @@ class my_bpbutton extends CModule
 
     public function DoInstall()
     {
+        Loader::includeModule('main');
+
+        $connection = Application::getConnection();
+        $tableName = 'my_bpbutton_settings';
+
+        if (!$connection->isTableExists($tableName)) {
+            $connection->queryExecute(
+                'CREATE TABLE IF NOT EXISTS `' . $tableName . '` (
+                    `ID` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    `FIELD_ID` INT UNSIGNED NOT NULL,
+                    `ENTITY_ID` VARCHAR(50) NULL,
+                    `HANDLER_URL` VARCHAR(500) NULL,
+                    `TITLE` VARCHAR(255) NULL,
+                    `WIDTH` VARCHAR(50) NULL,
+                    `ACTIVE` CHAR(1) NOT NULL DEFAULT \'Y\',
+                    `CREATED_AT` DATETIME NOT NULL,
+                    `UPDATED_AT` DATETIME NOT NULL,
+                    PRIMARY KEY (`ID`),
+                    UNIQUE KEY `UX_BPBTN_FIELD` (`FIELD_ID`),
+                    KEY `IX_BPBTN_ENTITY` (`ENTITY_ID`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8;'
+            );
+        }
+
         RegisterModule($this->MODULE_ID);
         $this->InstallEvents();
     }
