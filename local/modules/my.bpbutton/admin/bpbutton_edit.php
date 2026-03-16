@@ -67,6 +67,7 @@ if ($isPost && $isAjax && (isset($_POST['save']) || isset($_POST['apply'])) && $
             'BUTTON_TEXT' => $request->getPost('BUTTON_TEXT'),
             'BUTTON_SIZE' => $request->getPost('BUTTON_SIZE'),
             'ACTIVE' => $request->getPost('ACTIVE'),
+            'HIDE_BP_TAB' => $request->getPost('HIDE_BP_TAB'),
         ];
         $validation = $formService->validate($postData);
 
@@ -139,6 +140,7 @@ if ($isPost && (isset($_POST['save']) || isset($_POST['apply']))) {
         'BUTTON_TEXT' => $request->getPost('BUTTON_TEXT'),
         'BUTTON_SIZE' => $request->getPost('BUTTON_SIZE'),
         'ACTIVE' => $request->getPost('ACTIVE'),
+        'HIDE_BP_TAB' => $request->getPost('HIDE_BP_TAB'),
     ];
     $validation = $formService->validate($postData);
 
@@ -278,6 +280,15 @@ $tabControl = new CAdminTabControl('tabControl', [
             <?php endif; ?>
         </td>
     </tr>
+    <?php $hideBpTab = ($settingsRow['HIDE_BP_TAB'] ?? 'N') === 'Y'; ?>
+    <tr id="hide-bp-tab-row" style="<?= $actionType !== 'bp_launch' ? 'display:none;' : ''; ?>">
+        <td><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HIDE_BP_TAB') ?: 'Скрыть вкладку Бизнес-процессы'); ?>:</td>
+        <td>
+            <input type="checkbox" name="HIDE_BP_TAB" value="Y"<?= $hideBpTab ? ' checked' : ''; ?>
+                   title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HIDE_BP_TAB_HINT') ?: ''); ?>">
+            <span style="margin-left: 6px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HIDE_BP_TAB_HINT') ?: 'Скрыть стандартную вкладку «Бизнес-процессы» в карточке CRM'); ?></span>
+        </td>
+    </tr>
     <tr>
         <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL'); ?>:</td>
         <td>
@@ -346,10 +357,13 @@ $tabControl = new CAdminTabControl('tabControl', [
 (function() {
     var radios = document.querySelectorAll('input[name="ACTION_TYPE"]');
     var bpRow = document.getElementById('bp-template-row');
+    var hideBpTabRow = document.getElementById('hide-bp-tab-row');
     if (radios.length && bpRow) {
         function toggle() {
             var v = document.querySelector('input[name="ACTION_TYPE"]:checked');
-            bpRow.style.display = (v && v.value === 'bp_launch') ? '' : 'none';
+            var show = (v && v.value === 'bp_launch');
+            bpRow.style.display = show ? '' : 'none';
+            if (hideBpTabRow) hideBpTabRow.style.display = show ? '' : 'none';
         }
         radios.forEach(function(r) { r.addEventListener('change', toggle); });
         toggle();

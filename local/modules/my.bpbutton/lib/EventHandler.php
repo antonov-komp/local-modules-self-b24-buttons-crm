@@ -85,6 +85,54 @@ class EventHandler
     }
 
     /**
+     * Миграция TASK-014-A: добавление колонки HIDE_BP_TAB.
+     */
+    private static function ensureHideBpTabColumnExists(): void
+    {
+        try {
+            $connection = \Bitrix\Main\Application::getConnection();
+            $tableName = 'my_bpbutton_settings';
+            if (!$connection->isTableExists($tableName)) {
+                return;
+            }
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'HIDE_BP_TAB'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\' AFTER `BP_TEMPLATE_ID`'
+                );
+            }
+        } catch (\Throwable $e) {
+            // Игнорируем ошибки миграции
+        }
+    }
+
+    /**
+     * Определить ENTITY_ID по URL страницы CRM (детали сущности).
+     *
+     * @param string $requestUri REQUEST_URI
+     * @return string|null CRM_LEAD, CRM_DEAL, CRM_DYNAMIC_123 и т.д. или null
+     */
+    private static function resolveEntityIdFromCrmDetailsUrl(string $requestUri): ?string
+    {
+        if (preg_match('#/crm/lead/details/#i', $requestUri)) {
+            return 'CRM_LEAD';
+        }
+        if (preg_match('#/crm/deal/details/#i', $requestUri)) {
+            return 'CRM_DEAL';
+        }
+        if (preg_match('#/crm/contact/details/#i', $requestUri)) {
+            return 'CRM_CONTACT';
+        }
+        if (preg_match('#/crm/company/details/#i', $requestUri)) {
+            return 'CRM_COMPANY';
+        }
+        if (preg_match('#/crm/type/(\d+)/details/#i', $requestUri, $m)) {
+            return 'CRM_DYNAMIC_' . (int)$m[1];
+        }
+        return null;
+    }
+
+    /**
      * Подключение JS для Entity Editor на страницах CRM.
      * Обеспечивает отображение кнопки bp_button_field сразу в режиме просмотра.
      */
@@ -98,6 +146,7 @@ class EventHandler
         self::ensureButtonTextColumnExists();
         self::ensureButtonSizeColumnExists();
         self::ensureBpLaunchColumnsExist();
+        self::ensureHideBpTabColumnExists();
         // Подключаем на страницах CRM, админки и настройки полей (config, userfield)
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         $isCrm = stripos($requestUri, '/crm/') !== false || stripos($requestUri, 'crm.') !== false;
@@ -111,6 +160,20 @@ class EventHandler
 
         try {
             Extension::load('my_bpbutton.entity_editor');
+
+            // TASK-014-A: скрытие вкладки «Бизнес-процессы» на страницах деталей CRM
+            if ($isCrm) {
+                $entityId = self::resolveEntityIdFromCrmDetailsUrl($requestUri);
+                if ($entityId !== null) {
+                    $repository = new \My\BpButton\Repository\SettingsRepository();
+                    if ($repository->shouldHideBpTabForEntity($entityId)) {
+                        $GLOBALS['APPLICATION']->AddHeadString(
+                            '<script>window.MY_BPBUTTON_HIDE_BP_TAB=true;</script>',
+                            true
+                        );
+                    }
+                }
+            }
         } catch (\Throwable $e) {
             SecurityHelper::safeLog($e, 'my.bpbutton', 'EventHandler::onMainProlog');
         }

@@ -83,6 +83,11 @@ class SettingsTable extends Entity\DataManager
 
             new Entity\IntegerField('BP_TEMPLATE_ID', []),
 
+            new Entity\BooleanField('HIDE_BP_TAB', [
+                'values'  => ['N', 'Y'],
+                'default' => 'N',
+            ]),
+
             new Entity\BooleanField('ACTIVE', [
                 'values'  => ['N', 'Y'],
                 'default' => 'Y',

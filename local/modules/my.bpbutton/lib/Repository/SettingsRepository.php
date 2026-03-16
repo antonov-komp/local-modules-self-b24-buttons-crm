@@ -66,6 +66,32 @@ final class SettingsRepository
     }
 
     /**
+     * Проверить, нужно ли скрывать вкладку «Бизнес-процессы» для сущности.
+     *
+     * @param string $entityId ENTITY_ID (CRM_LEAD, CRM_DEAL, CRM_DYNAMIC_123 и т.д.)
+     * @return bool
+     */
+    public function shouldHideBpTabForEntity(string $entityId): bool
+    {
+        $entityId = trim($entityId);
+        if ($entityId === '') {
+            return false;
+        }
+
+        $row = SettingsTable::getList([
+            'filter' => [
+                '=ENTITY_ID' => $entityId,
+                '=ACTION_TYPE' => 'bp_launch',
+                '=HIDE_BP_TAB' => 'Y',
+                '=ACTIVE' => 'Y',
+            ],
+            'limit' => 1,
+        ])->fetch();
+
+        return $row !== false;
+    }
+
+    /**
      * Сброс кеша (для тестов или при необходимости).
      */
     public static function clearCache(): void

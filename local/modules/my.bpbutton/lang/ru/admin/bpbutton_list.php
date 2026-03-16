@@ -51,6 +51,8 @@ $MESS['MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_SM'] = 'Маленькая';
 $MESS['MY_BPBUTTON_EDIT_FIELD_BUTTON_SIZE_LG'] = 'Большая';
 $MESS['MY_BPBUTTON_EDIT_FIELD_ACTIVE'] = 'Активно';
 $MESS['MY_BPBUTTON_EDIT_FIELD_ACTIVE_HINT'] = 'Включено — кнопка видна и доступна пользователям. Выключено — кнопка скрыта (настройки сохраняются).';
+$MESS['MY_BPBUTTON_EDIT_FIELD_HIDE_BP_TAB'] = 'Скрыть вкладку Бизнес-процессы';
+$MESS['MY_BPBUTTON_EDIT_FIELD_HIDE_BP_TAB_HINT'] = 'Скрыть стандартную вкладку «Бизнес-процессы» в карточке CRM. Полезно, если запуск БП выполняется через кнопку поля.';
 
 $MESS['MY_BPBUTTON_EDIT_SAVE_SUCCESS'] = 'Настройки кнопки сохранены.';
 $MESS['MY_BPBUTTON_EDIT_SAVE_ERROR'] = 'Ошибка сохранения настроек: #ERROR#';

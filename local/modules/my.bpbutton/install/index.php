@@ -130,6 +130,7 @@ class my_bpbutton extends CModule
                     `BUTTON_SIZE` VARCHAR(20) NULL,
                     `ACTION_TYPE` VARCHAR(20) NULL DEFAULT \'url\',
                     `BP_TEMPLATE_ID` INT UNSIGNED NULL,
+                    `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\',
                     `ACTIVE` CHAR(1) NOT NULL DEFAULT \'Y\',
                     `CREATED_AT` DATETIME NOT NULL,
                     `UPDATED_AT` DATETIME NOT NULL,
@@ -164,6 +165,13 @@ class my_bpbutton extends CModule
             if (!$result->fetch()) {
                 $connection->queryExecute(
                     'ALTER TABLE `' . $tableName . '` ADD COLUMN `BP_TEMPLATE_ID` INT UNSIGNED NULL AFTER `ACTION_TYPE`'
+                );
+            }
+            // Миграция TASK-014-A: HIDE_BP_TAB
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'HIDE_BP_TAB'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\' AFTER `BP_TEMPLATE_ID`'
                 );
             }
         }

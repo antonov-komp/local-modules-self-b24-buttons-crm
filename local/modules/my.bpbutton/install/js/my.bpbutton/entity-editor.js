@@ -102,4 +102,38 @@
 	// Дополнительно — на случай асинхронной загрузки entity-editor
 	BX.ready(patchEntityEditorUserField);
 	}
+
+	// TASK-014-A: скрытие вкладки «Бизнес-процессы» в карточке CRM
+	if (typeof window.MY_BPBUTTON_HIDE_BP_TAB !== 'undefined' && window.MY_BPBUTTON_HIDE_BP_TAB) {
+		function hideBpTab() {
+			var tabContent = document.querySelector('[data-tab-id="tab_bizproc"]');
+			var tabMenu = document.getElementById('tab_bizproc');
+			var bpStarterBtn = document.getElementById('crm_entity_bp_starter');
+			var bpStarterWrap = document.querySelector('.crm-entity-bizproc-container');
+			if (tabContent) {
+				tabContent.style.display = 'none';
+			}
+			if (tabMenu) {
+				tabMenu.style.display = 'none';
+			}
+			if (bpStarterBtn) {
+				bpStarterBtn.style.display = 'none';
+			}
+			if (bpStarterWrap) {
+				bpStarterWrap.style.display = 'none';
+			}
+		}
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', function() {
+				hideBpTab();
+				setTimeout(hideBpTab, 500);
+				setTimeout(hideBpTab, 1500);
+			});
+		} else {
+			hideBpTab();
+			setTimeout(hideBpTab, 500);
+			setTimeout(hideBpTab, 1500);
+		}
+		BX.ready(hideBpTab);
+	}
 })();

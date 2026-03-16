@@ -69,6 +69,7 @@ class SettingsFormService
         $title = trim((string)($data['TITLE'] ?? ''));
         $buttonText = trim((string)($data['BUTTON_TEXT'] ?? ''));
         $active = ($data['ACTIVE'] ?? '') === 'Y' ? 'Y' : 'N';
+        $hideBpTab = ($data['HIDE_BP_TAB'] ?? '') === 'Y' ? 'Y' : 'N';
 
         return [
             'valid' => empty($errors),
@@ -82,6 +83,7 @@ class SettingsFormService
                 'BUTTON_TEXT' => $buttonText !== '' ? $buttonText : null,
                 'BUTTON_SIZE' => $buttonSize !== '' ? $buttonSize : null,
                 'ACTIVE' => $active,
+                'HIDE_BP_TAB' => ($actionType === 'bp_launch') ? $hideBpTab : 'N',
             ],
         ];
     }
@@ -104,6 +106,7 @@ class SettingsFormService
             'BUTTON_TEXT' => $data['BUTTON_TEXT'],
             'BUTTON_SIZE' => $data['BUTTON_SIZE'],
             'ACTIVE' => $data['ACTIVE'],
+            'HIDE_BP_TAB' => $data['HIDE_BP_TAB'] ?? 'N',
             'UPDATED_AT' => new \Bitrix\Main\Type\DateTime(),
         ];
 
