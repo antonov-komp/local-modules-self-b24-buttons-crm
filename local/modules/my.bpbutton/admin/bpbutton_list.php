@@ -9,6 +9,7 @@ use Bitrix\Main\UserFieldTable;
 use Bitrix\Main\Entity;
 use Bitrix\Main\UI\Extension;
 use My\BpButton\Internals\SettingsTable;
+use My\BpButton\Service\EntityNameResolver;
 use My\BpButton\UserField\BpButtonUserType;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php';
@@ -222,6 +223,9 @@ $totalRows = (int)$result->getCount();
 
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php';
 
+$entityResolver = new EntityNameResolver();
+$entityNamesCache = [];
+
 $lAdmin->AddHeaders([
     ['id' => 'ID', 'content' => Loc::getMessage('MY_BPBUTTON_LIST_COLUMN_ID'), 'default' => true, 'sort' => 'ID'],
     ['id' => 'FIELD', 'content' => Loc::getMessage('MY_BPBUTTON_LIST_COLUMN_FIELD'), 'default' => true],
@@ -247,7 +251,20 @@ while ($row = $result->fetch()) {
     $fieldLabel = implode(' ', $fieldLabelParts);
 
     $listRow->AddViewField('FIELD', htmlspecialcharsbx($fieldLabel));
-    $listRow->AddViewField('ENTITY_ID', htmlspecialcharsbx((string)$row['ENTITY_ID']));
+
+    // ENTITY_ID с человекочитаемым названием сущности и entity_type_id
+    $entityId = (string)($row['ENTITY_ID'] ?? '');
+    if (!isset($entityNamesCache[$entityId])) {
+        $entityNamesCache[$entityId] = $entityResolver->resolve($entityId);
+    }
+    $resolved = $entityNamesCache[$entityId];
+    $displayValue = $resolved['entity_name'] !== $resolved['entity_id']
+        ? htmlspecialcharsbx($resolved['entity_id']) . ' (' . htmlspecialcharsbx($resolved['entity_name']) . ')'
+        : htmlspecialcharsbx($resolved['entity_id']);
+    if (isset($resolved['entity_type_id']) && $resolved['entity_type_id'] !== null) {
+        $displayValue .= ' <span style="color:#999; font-size:11px;" title="' . htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_LIST_ENTITY_TYPE_ID_HINT')) . '">[' . (int)$resolved['entity_type_id'] . ']</span>';
+    }
+    $listRow->AddViewField('ENTITY_ID', $displayValue);
 
         // HANDLER_URL с тултипом
     $handlerUrl = (string)$row['HANDLER_URL'];

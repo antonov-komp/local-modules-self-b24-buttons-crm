@@ -7,6 +7,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UserFieldTable;
 use Bitrix\Main\UI\Extension;
+use My\BpButton\Service\EntityNameResolver;
 use My\BpButton\Service\SettingsFormService;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php';
@@ -219,10 +220,27 @@ $tabControl = new CAdminTabControl('tabControl', [
         <td width="40%"><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_FIELD_INFO'); ?>:</td>
         <td width="60%"><?= htmlspecialcharsbx($fieldTitle); ?></td>
     </tr>
+    <?php
+    $entityResolver = new EntityNameResolver();
+    $entityResolved = $entityResolver->resolve((string)($settingsRow['ENTITY_ID'] ?? ''));
+    ?>
     <tr>
         <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ENTITY_ID'); ?>:</td>
-        <td><?= htmlspecialcharsbx((string)$settingsRow['ENTITY_ID']); ?></td>
+        <td><?= htmlspecialcharsbx($entityResolved['entity_id']); ?></td>
     </tr>
+    <tr>
+        <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ENTITY_NAME'); ?>:</td>
+        <td><?= htmlspecialcharsbx($entityResolved['entity_name']); ?></td>
+    </tr>
+    <?php if (isset($entityResolved['entity_type_id']) && $entityResolved['entity_type_id'] !== null): ?>
+    <tr>
+        <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ENTITY_TYPE_ID'); ?>:</td>
+        <td>
+            <code><?= (int)$entityResolved['entity_type_id']; ?></code>
+            <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_ENTITY_TYPE_ID_HINT') ?: ''); ?></div>
+        </td>
+    </tr>
+    <?php endif; ?>
     <tr>
         <td><?= Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL'); ?>:</td>
         <td>
