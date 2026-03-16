@@ -23,6 +23,13 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
     'lang' => '/local/modules/my.bpbutton/lang/' . LANGUAGE_ID . '/install/js/my.bpbutton/admin.list.php',
 ]);
 
+// Расширение для Entity Editor: всегда показывать кнопку bp_button_field в режиме просмотра.
+\CJSCore::RegisterExt('my_bpbutton.entity_editor', [
+    'js' => '/local/modules/my.bpbutton/install/js/my.bpbutton/entity-editor.js',
+    'rel' => ['main.core', 'ui.entity-editor'],
+    'lang' => '/local/modules/my.bpbutton/lang/' . LANGUAGE_ID . '/install/js/my.bpbutton/entity-editor.php',
+]);
+
 // Сервисный include для совместимости: в ряде окружений Loader::includeModule() может ожидать true.
 return Loader::includeModule('main');
 

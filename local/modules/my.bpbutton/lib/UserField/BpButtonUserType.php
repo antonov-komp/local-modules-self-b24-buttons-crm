@@ -22,10 +22,14 @@ class BpButtonUserType
      */
     public static function getUserTypeDescription(): array
     {
+        $description = (string)Loc::getMessage('BPBUTTON_USER_TYPE_NAME');
+        if ($description === '') {
+            $description = 'Кнопка бизнес‑процесса (bp_button_field)';
+        }
         return [
             'USER_TYPE_ID'  => self::USER_TYPE_ID,
             'CLASS_NAME'    => static::class,
-            'DESCRIPTION'   => Loc::getMessage('BPBUTTON_USER_TYPE_NAME'),
+            'DESCRIPTION'   => $description,
             'BASE_TYPE'     => 'string',
             'RENDER_COMPONENT' => self::RENDER_COMPONENT,
             // Callback для просмотра (используется в первую очередь)
@@ -147,11 +151,6 @@ class BpButtonUserType
             $field = [];
         }
         
-        // Отладка: логируем вызов метода (можно убрать после отладки)
-        if (function_exists('AddMessage2Log')) {
-            AddMessage2Log('BpButtonUserType::getPublicViewHTML called. Field ID: ' . ($field['ID'] ?? 'N/A') . ', Entity ID: ' . ($field['ENTITY_ID'] ?? 'N/A') . ', Has value: ' . (!empty($value) ? 'yes' : 'no'), 'my.bpbutton');
-        }
-
         // Подключаем стандартные UI‑стили и JS-логику кнопки только там, где реально отрисовано поле.
         if (class_exists(Extension::class)) {
             try {
@@ -358,6 +357,7 @@ class BpButtonUserType
      * Рендеринг поля через компонент (новый подход D7).
      *
      * Используется Bitrix24 для рендеринга поля через компонент.
+     * Для режима main.admin_settings используется getSettingsHTML — компонент не имеет шаблона.
      *
      * @param array $userField
      * @param array|null $additionalParameters
@@ -365,34 +365,30 @@ class BpButtonUserType
      */
     public static function renderField(array $userField, ?array $additionalParameters = []): string
     {
-        global $APPLICATION;
+        $additionalParameters = $additionalParameters ?? [];
+        $mode = $additionalParameters['mode'] ?? '';
 
-        // Логируем вызов метода
-        if (function_exists('AddMessage2Log')) {
-            AddMessage2Log('BpButtonUserType::renderField called. Component: ' . self::RENDER_COMPONENT, 'my.bpbutton');
+        // Режим настроек поля: компонент не имеет шаблона main.admin_settings, используем getSettingsHTML
+        if ($mode === 'main.admin_settings') {
+            $htmlControlName = $additionalParameters['NAME'] ?? 'settings';
+            return static::getSettingsHTML($userField, $htmlControlName, $additionalParameters);
         }
 
+        global $APPLICATION;
+
         // Используем компонент для рендеринга (как в BaseType::getHtml)
-        // BaseUfComponent ожидает ~userField в arParams
         ob_start();
         $APPLICATION->IncludeComponent(
             self::RENDER_COMPONENT,
             '',
             [
                 '~userField' => $userField,
-                'additionalParameters' => $additionalParameters ?? [],
+                'additionalParameters' => $additionalParameters,
             ],
             null,
             ['HIDE_ICONS' => 'Y']
         );
-        $html = ob_get_clean();
-
-        // Логируем результат
-        if (function_exists('AddMessage2Log')) {
-            AddMessage2Log('BpButtonUserType::renderField result length: ' . strlen($html), 'my.bpbutton');
-        }
-
-        return $html;
+        return ob_get_clean();
     }
 
     /**

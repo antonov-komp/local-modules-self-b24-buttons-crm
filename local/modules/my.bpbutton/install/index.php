@@ -194,6 +194,14 @@ class my_bpbutton extends CModule
     {
         RegisterModuleDependences(
             'main',
+            'OnProlog',
+            $this->MODULE_ID,
+            \My\BpButton\EventHandler::class,
+            'onMainProlog'
+        );
+
+        RegisterModuleDependences(
+            'main',
             'OnUserTypeBuildList',
             $this->MODULE_ID,
             \My\BpButton\EventHandler::class,
@@ -222,6 +230,14 @@ class my_bpbutton extends CModule
      */
     public function UnInstallEvents(): void
     {
+        UnRegisterModuleDependences(
+            'main',
+            'OnProlog',
+            $this->MODULE_ID,
+            \My\BpButton\EventHandler::class,
+            'onMainProlog'
+        );
+
         UnRegisterModuleDependences(
             'main',
             'OnUserTypeBuildList',

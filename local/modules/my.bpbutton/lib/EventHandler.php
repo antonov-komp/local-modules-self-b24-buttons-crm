@@ -5,12 +5,40 @@ declare(strict_types=1);
 namespace My\BpButton;
 
 use Bitrix\Main\Loader;
+use Bitrix\Main\UI\Extension;
 use My\BpButton\Helper\SecurityHelper;
 use My\BpButton\Internals\SettingsTable;
 use My\BpButton\UserField\BpButtonUserType;
 
 class EventHandler
 {
+    /**
+     * Подключение JS для Entity Editor на страницах CRM.
+     * Обеспечивает отображение кнопки bp_button_field сразу в режиме просмотра.
+     */
+    public static function onMainProlog(): void
+    {
+        if (!Loader::includeModule('my.bpbutton')) {
+            return;
+        }
+        // Подключаем на страницах CRM, админки и настройки полей (config, userfield)
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        $isCrm = stripos($requestUri, '/crm/') !== false || stripos($requestUri, 'crm.') !== false;
+        $isAdmin = stripos($requestUri, '/bitrix/admin/') !== false;
+        $isFieldConfig = stripos($requestUri, 'userfield') !== false
+            || stripos($requestUri, 'field.config') !== false
+            || stripos($requestUri, 'main.field.config') !== false;
+        if (!$isCrm && !$isAdmin && !$isFieldConfig) {
+            return;
+        }
+
+        try {
+            Extension::load('my_bpbutton.entity_editor');
+        } catch (\Throwable $e) {
+            SecurityHelper::safeLog($e, 'my.bpbutton', 'EventHandler::onMainProlog');
+        }
+    }
+
     /**
      * Регистрация пользовательского типа через OnUserTypeBuildList.
      *
@@ -21,36 +49,14 @@ class EventHandler
      */
     public static function onUserTypeBuildList(): array
     {
-        // Логируем вызов обработчика
-        if (function_exists('AddMessage2Log')) {
-            AddMessage2Log('EventHandler::onUserTypeBuildList called', 'my.bpbutton');
-        }
-
         if (!Loader::includeModule('my.bpbutton')) {
-            if (function_exists('AddMessage2Log')) {
-                AddMessage2Log('Module my.bpbutton not loaded in onUserTypeBuildList', 'my.bpbutton');
-            }
             return [];
         }
 
         try {
-            // Возвращаем описание типа поля напрямую
-            $description = BpButtonUserType::getUserTypeDescription();
-            
-            if (function_exists('AddMessage2Log')) {
-                AddMessage2Log('Returning user type description: ' . json_encode([
-                    'USER_TYPE_ID' => $description['USER_TYPE_ID'] ?? 'N/A',
-                    'CLASS_NAME' => $description['CLASS_NAME'] ?? 'N/A',
-                    'RENDER_COMPONENT' => $description['RENDER_COMPONENT'] ?? 'N/A'
-                ]), 'my.bpbutton');
-            }
-            
-            return $description;
+            return BpButtonUserType::getUserTypeDescription();
         } catch (\Throwable $e) {
             SecurityHelper::safeLog($e, 'my.bpbutton', 'EventHandler::onUserTypeBuildList');
-            if (function_exists('AddMessage2Log')) {
-                AddMessage2Log('Error in onUserTypeBuildList: ' . $e->getMessage(), 'my.bpbutton');
-            }
             return [];
         }
     }
