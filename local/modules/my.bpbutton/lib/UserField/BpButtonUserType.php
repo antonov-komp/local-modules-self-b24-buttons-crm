@@ -28,6 +28,11 @@ class BpButtonUserType
             'BASE_TYPE'     => 'string',
             'GetDBColumnType' => [static::class, 'getDBColumnType'],
             'GetPublicViewHTML' => [static::class, 'getPublicViewHTML'],
+            // В CRM-карточке поле часто рендерится в "public edit" режиме, поэтому нужен отдельный callback.
+            'GetPublicEditHTML' => [static::class, 'getPublicEditHTML'],
+            'GetPublicTextHTML' => [static::class, 'getPublicTextHTML'],
+            'GetPublicViewHTMLMulty' => [static::class, 'getPublicViewHTMLMulty'],
+            'GetPublicEditHTMLMulty' => [static::class, 'getPublicEditHTMLMulty'],
             'GetAdminListViewHTML' => [static::class, 'getAdminListViewHTML'],
             'GetEditFormHTML' => [static::class, 'getEditFormHTML'],
         ];
@@ -95,9 +100,10 @@ class BpButtonUserType
      */
     public static function getPublicViewHTML(array $field, ?array $value, array $additional): string
     {
-        // Подключаем стандартные UI‑стили, если доступно.
+        // Подключаем стандартные UI‑стили и JS-логику кнопки только там, где реально отрисовано поле.
         if (class_exists(Extension::class)) {
             Extension::load('ui.buttons');
+            Extension::load('my_bpbutton.button');
         }
 
         $buttonText = Loc::getMessage('BPBUTTON_USER_TYPE_BUTTON_TEXT')
@@ -137,6 +143,37 @@ class BpButtonUserType
             implode(' ', $attributes),
             htmlspecialcharsbx($buttonText)
         );
+    }
+
+    /**
+     * Публичное представление в режиме редактирования (CRM карточка).
+     *
+     * Для MVP используем тот же UI, что и во "view": кнопка открывает SidePanel.
+     */
+    public static function getPublicEditHTML(array $field, ?array $value, array $additional): string
+    {
+        return static::getPublicViewHTML($field, $value, $additional);
+    }
+
+    /**
+     * Текстовое представление (например, для некоторых списков/экспорта).
+     */
+    public static function getPublicTextHTML(array $field, ?array $value, array $additional): string
+    {
+        return htmlspecialcharsbx(Loc::getMessage('BPBUTTON_USER_TYPE_BUTTON_TEXT') ?: (Loc::getMessage('BPBUTTON_USER_TYPE_NAME') ?: ''));
+    }
+
+    /**
+     * Multy-варианты: у нас поле логически одиночное, поэтому рендерим как одиночное.
+     */
+    public static function getPublicViewHTMLMulty(array $field, ?array $value, array $additional): string
+    {
+        return static::getPublicViewHTML($field, $value, $additional);
+    }
+
+    public static function getPublicEditHTMLMulty(array $field, ?array $value, array $additional): string
+    {
+        return static::getPublicEditHTML($field, $value, $additional);
     }
 }
 
