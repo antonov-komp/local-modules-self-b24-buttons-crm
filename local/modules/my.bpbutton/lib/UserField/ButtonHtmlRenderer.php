@@ -103,7 +103,12 @@ final class ButtonHtmlRenderer
         $fieldId = (string)($field['ID'] ?? '');
 
         $elementId = '';
-        if (!empty($additional['ELEMENT_ID'])) {
+        // ENTITY_VALUE_ID — ID документа в карточке CRM (lead, deal, contact и т.д.)
+        if (!empty($field['ENTITY_VALUE_ID']) && (int)$field['ENTITY_VALUE_ID'] > 0) {
+            $elementId = (string)$field['ENTITY_VALUE_ID'];
+        } elseif (!empty($additional['ENTITY_VALUE_ID']) && (int)$additional['ENTITY_VALUE_ID'] > 0) {
+            $elementId = (string)$additional['ENTITY_VALUE_ID'];
+        } elseif (!empty($additional['ELEMENT_ID'])) {
             $elementId = (string)$additional['ELEMENT_ID'];
         } elseif (!empty($additional['VALUE'])) {
             $elementId = (string)$additional['VALUE'];

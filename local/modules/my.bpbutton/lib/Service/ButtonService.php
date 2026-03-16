@@ -9,8 +9,8 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use CCrmBizProcHelper;
-use CCrmOwnerType;
 use My\BpButton\Helper\SecurityHelper;
+use My\BpButton\Service\BpTemplateResolver;
 use My\BpButton\Internals\LogsTable;
 use My\BpButton\Repository\SettingsRepository;
 
@@ -104,7 +104,7 @@ final class ButtonService
             return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_BP_MODULE_REQUIRED') ?: 'Требуется модуль bizproc.');
         }
 
-        $entityTypeId = CCrmOwnerType::ResolveID($entityId);
+        $entityTypeId = BpTemplateResolver::resolveEntityTypeIdFromEntityId($entityId);
         if ($entityTypeId <= 0) {
             return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_INVALID_ENTITY') ?: 'Некорректный тип сущности.');
         }

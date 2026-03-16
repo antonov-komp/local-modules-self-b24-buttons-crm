@@ -13,6 +13,32 @@
 	var Api = BX.MyBpButton.ButtonApi;
 	var SidePanel = BX.MyBpButton.ButtonSidePanel;
 
+	/**
+	 * Извлекает текст ошибки из объекта ошибки (разные форматы Bitrix/JS).
+	 * @param {*} err — объект ошибки или строка
+	 * @returns {string} текст ошибки или пустая строка
+	 */
+	function extractBpError(err)
+	{
+		if (!err) return '';
+		if (typeof err === 'string') return err.trim();
+		if (err.message) return String(err.message).trim();
+		if (err.error_description) return String(err.error_description).trim();
+		if (err.text) return String(err.text).trim();
+		if (Array.isArray(err.errors) && err.errors.length > 0)
+		{
+			var first = err.errors[0];
+			if (typeof first === 'string') return first.trim();
+			if (first && first.message) return String(first.message).trim();
+		}
+		if (err.errors && typeof err.errors === 'object')
+		{
+			var keys = Object.keys(err.errors);
+			if (keys.length > 0) return String(err.errors[keys[0]]).trim();
+		}
+		return '';
+	}
+
 	BX.MyBpButton.Button = {
 		selectors: {
 			button: '.js-bpbutton-field'
@@ -193,8 +219,9 @@
 					self.logClick(buttonEl, ctx, 'SUCCESS', null);
 				}).catch(function (err)
 				{
-					State.notify(State.message('MY_BPBTN_ERROR_INTERNAL_ERROR', (err && err.message) ? err.message : 'Ошибка запуска БП'));
-					self.logClick(buttonEl, ctx, 'BP_LAUNCH_ERROR', (err && err.message) ? err.message : '');
+					var errMsg = extractBpError(err);
+					State.notify(errMsg || State.message('MY_BPBTN_ERROR_INTERNAL_ERROR', 'Ошибка запуска БП'));
+					self.logClick(buttonEl, ctx, 'BP_LAUNCH_ERROR', errMsg || '');
 				})['finally'](function ()
 				{
 					State.setIdle(buttonEl);

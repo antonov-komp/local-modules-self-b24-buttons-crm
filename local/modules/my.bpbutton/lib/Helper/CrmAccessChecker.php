@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace My\BpButton\Helper;
 
 use Bitrix\Crm\Security\EntityAuthorization;
+use My\BpButton\Service\BpTemplateResolver;
 
 /**
  * Проверка прав на чтение CRM-сущности.
@@ -16,7 +17,7 @@ final class CrmAccessChecker
     /**
      * Проверить право на чтение CRM-сущности.
      *
-     * @param string $entityId LEAD, DEAL, CONTACT, DYNAMIC_123 и т.д.
+     * @param string $entityId CRM_LEAD, CRM_DEAL, CRM_DYNAMIC_123 и т.д.
      * @param int $elementId ID элемента
      * @return bool
      */
@@ -26,36 +27,11 @@ final class CrmAccessChecker
             return false;
         }
 
-        $entityTypeId = $this->resolveEntityTypeId($entityId);
+        $entityTypeId = BpTemplateResolver::resolveEntityTypeIdFromEntityId($entityId);
         if ($entityTypeId <= 0) {
             return false;
         }
 
         return EntityAuthorization::checkReadPermission($entityTypeId, $elementId);
-    }
-
-    /**
-     * Преобразовать entityId в числовой entityTypeId.
-     */
-    private function resolveEntityTypeId(string $entityId): int
-    {
-        $normalized = mb_strtoupper(trim($entityId));
-        if ($normalized === '') {
-            return 0;
-        }
-
-        if (ctype_digit($normalized)) {
-            return (int)$normalized;
-        }
-
-        if (preg_match('~^DYNAMIC_(\d+)$~', $normalized, $m)) {
-            return (int)$m[1];
-        }
-
-        if (class_exists(\CCrmOwnerType::class)) {
-            return (int)\CCrmOwnerType::ResolveID($normalized);
-        }
-
-        return 0;
     }
 }
