@@ -93,8 +93,19 @@ class my_bpbutton extends CModule
     /**
      * Создание таблиц БД
      */
-    protected function InstallDB(): void
+    public function InstallDB(): void
     {
+        // Регистрация автозагрузчика классов
+        Loader::registerAutoLoadClasses($this->MODULE_ID, [
+            'My\\BpButton\\UserField\\BpButtonUserType' => 'lib/UserField/BpButtonUserType.php',
+            'My\\BpButton\\EventHandler' => 'lib/EventHandler.php',
+            'My\\BpButton\\Internals\\SettingsTable' => 'lib/Internals/SettingsTable.php',
+            'My\\BpButton\\Internals\\LogsTable' => 'lib/Internals/LogsTable.php',
+            'My\\BpButton\\Service\\ButtonService' => 'lib/Service/ButtonService.php',
+            'My\\BpButton\\Controller\\ButtonController' => 'lib/Controller/ButtonController.php',
+            'My\\BpButton\\Helper\\SecurityHelper' => 'lib/Helper/SecurityHelper.php',
+        ]);
+
         $connection = Application::getConnection();
         $sqlHelper = $connection->getSqlHelper();
 
@@ -152,8 +163,11 @@ class my_bpbutton extends CModule
      * @param bool $deleteSettings Удалять ли таблицу настроек
      * @param bool $deleteLogs Удалять ли таблицу логов
      */
-    protected function UnInstallDB(bool $deleteSettings = true, bool $deleteLogs = false): void
+    public function UnInstallDB(bool $deleteSettings = true, bool $deleteLogs = false): void
     {
+        // Автозагрузчик классов удаляется автоматически при удалении модуля через UnRegisterModule()
+        // Дополнительных действий не требуется
+
         $connection = Application::getConnection();
 
         // Удаление таблицы настроек (по умолчанию удаляем)
@@ -241,24 +255,19 @@ class my_bpbutton extends CModule
         $adminDir = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin';
         $installAdminDir = __DIR__ . '/admin';
 
-        // Проверяем существование прокси файлов в install/admin/
+        // Создаём директорию для прокси, если её нет
+        if (!Directory::isDirectoryExists($installAdminDir)) {
+            Directory::createDirectory($installAdminDir);
+        }
+
+        // Создаём/обновляем прокси для списка настроек
         $proxyListPath = $installAdminDir . '/my_bpbutton_bpbutton_list.php';
-        if (!File::isFileExists($proxyListPath)) {
-            // Создаём директорию для прокси, если её нет
-            if (!Directory::isDirectoryExists($installAdminDir)) {
-                Directory::createDirectory($installAdminDir);
-            }
+        $proxyListContent = "<?php\nrequire_once(\$_SERVER['DOCUMENT_ROOT'] . '/local/modules/my.bpbutton/admin/bpbutton_list.php');\n";
+        $proxyListFile = new File($proxyListPath);
+        $proxyListFile->putContents($proxyListContent);
 
-            // Создаём прокси для списка настроек
-            $proxyListContent = "<?php\nrequire_once(\$_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/my.bpbutton/admin/bpbutton_list.php');\n";
-            $proxyListFile = new File($proxyListPath);
-            $proxyListFile->putContents($proxyListContent);
-        }
-
-        // Копируем прокси в /bitrix/admin/
-        if (File::isFileExists($proxyListPath)) {
-            CopyDirFiles($installAdminDir, $adminDir, true, true);
-        }
+        // Копируем прокси в /bitrix/admin/ (всегда обновляем)
+        CopyDirFiles($installAdminDir, $adminDir, true, true);
     }
 
     /**

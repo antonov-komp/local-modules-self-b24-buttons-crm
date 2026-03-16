@@ -14,13 +14,45 @@ class EventHandler
     /**
      * Регистрация пользовательского типа через OnUserTypeBuildList.
      *
+     * Bitrix24 ожидает массив с описанием типа поля напрямую (не массив массивов).
+     * Метод ExecuteModuleEventEx вызывает обработчик и ожидает массив с ключом USER_TYPE_ID.
+     *
      * @return array
      */
     public static function onUserTypeBuildList(): array
     {
-        Loader::includeModule('my.bpbutton');
+        // Логируем вызов обработчика
+        if (function_exists('AddMessage2Log')) {
+            AddMessage2Log('EventHandler::onUserTypeBuildList called', 'my.bpbutton');
+        }
 
-        return BpButtonUserType::getUserTypeDescription();
+        if (!Loader::includeModule('my.bpbutton')) {
+            if (function_exists('AddMessage2Log')) {
+                AddMessage2Log('Module my.bpbutton not loaded in onUserTypeBuildList', 'my.bpbutton');
+            }
+            return [];
+        }
+
+        try {
+            // Возвращаем описание типа поля напрямую
+            $description = BpButtonUserType::getUserTypeDescription();
+            
+            if (function_exists('AddMessage2Log')) {
+                AddMessage2Log('Returning user type description: ' . json_encode([
+                    'USER_TYPE_ID' => $description['USER_TYPE_ID'] ?? 'N/A',
+                    'CLASS_NAME' => $description['CLASS_NAME'] ?? 'N/A',
+                    'RENDER_COMPONENT' => $description['RENDER_COMPONENT'] ?? 'N/A'
+                ]), 'my.bpbutton');
+            }
+            
+            return $description;
+        } catch (\Throwable $e) {
+            SecurityHelper::safeLog($e, 'my.bpbutton', 'EventHandler::onUserTypeBuildList');
+            if (function_exists('AddMessage2Log')) {
+                AddMessage2Log('Error in onUserTypeBuildList: ' . $e->getMessage(), 'my.bpbutton');
+            }
+            return [];
+        }
     }
 
     /**

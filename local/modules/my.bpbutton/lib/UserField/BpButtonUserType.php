@@ -13,6 +13,7 @@ Loc::loadMessages(__FILE__);
 class BpButtonUserType
 {
     public const USER_TYPE_ID = 'bp_button_field';
+    public const RENDER_COMPONENT = 'bitrix:main.field.bp_button_field';
 
     /**
      * Описание пользовательского типа поля.
@@ -26,15 +27,26 @@ class BpButtonUserType
             'CLASS_NAME'    => static::class,
             'DESCRIPTION'   => Loc::getMessage('BPBUTTON_USER_TYPE_NAME'),
             'BASE_TYPE'     => 'string',
+            'RENDER_COMPONENT' => self::RENDER_COMPONENT,
+            // Callback для просмотра (используется в первую очередь)
+            'VIEW_CALLBACK' => [static::class, 'getPublicViewHTML'],
+            'EDIT_CALLBACK' => [static::class, 'getPublicEditHTML'],
+            // Методы для рендеринга поля
             'GetDBColumnType' => [static::class, 'getDBColumnType'],
             'GetPublicViewHTML' => [static::class, 'getPublicViewHTML'],
-            // В CRM-карточке поле часто рендерится в "public edit" режиме, поэтому нужен отдельный callback.
             'GetPublicEditHTML' => [static::class, 'getPublicEditHTML'],
             'GetPublicTextHTML' => [static::class, 'getPublicTextHTML'],
             'GetPublicViewHTMLMulty' => [static::class, 'getPublicViewHTMLMulty'],
             'GetPublicEditHTMLMulty' => [static::class, 'getPublicEditHTMLMulty'],
             'GetAdminListViewHTML' => [static::class, 'getAdminListViewHTML'],
             'GetEditFormHTML' => [static::class, 'getEditFormHTML'],
+            'GetViewHTML' => [static::class, 'getViewHTML'],
+            'GetSettingsHTML' => [static::class, 'getSettingsHTML'],
+            'PrepareSettings' => [static::class, 'prepareSettings'],
+            // Альтернативные методы с маленькой буквы (для совместимости)
+            'getpublicviewhtml' => [static::class, 'getPublicViewHTML'],
+            'getpublicedithtml' => [static::class, 'getPublicEditHTML'],
+            'geteditformhtml' => [static::class, 'getEditFormHTML'],
         ];
     }
 
@@ -50,7 +62,9 @@ class BpButtonUserType
     }
 
     /**
-     * HTML в административном списке (минимальная реализация).
+     * HTML в административном списке.
+     *
+     * В списке показываем кнопку, а не текстовое значение.
      *
      * @param array       $field
      * @param array|null  $value
@@ -61,15 +75,18 @@ class BpButtonUserType
      */
     public static function getAdminListViewHTML(array $field, ?array $value, array $row, array $additional): string
     {
-        $display = isset($value['VALUE']) ? (string)$value['VALUE'] : '';
-
-        return htmlspecialcharsbx($display);
+        // Передаем данные строки в дополнительные параметры для получения ID элемента
+        if (!isset($additional['ELEMENT_ID']) && isset($row['ID'])) {
+            $additional['ELEMENT_ID'] = $row['ID'];
+        }
+        // В списке также показываем кнопку
+        return static::getPublicViewHTML($field, $value, $additional);
     }
 
     /**
      * HTML элемента при редактировании записи (админка / форма настроек поля).
      *
-     * Для первой версии поле может оставаться текстовым.
+     * В админке также показываем кнопку, а не текстовое поле.
      *
      * @param array       $field
      * @param array|null  $value
@@ -79,14 +96,23 @@ class BpButtonUserType
      */
     public static function getEditFormHTML(array $field, ?array $value, array $additional): string
     {
-        $htmlName = htmlspecialcharsbx($additional['NAME'] ?? $field['FIELD_NAME']);
-        $displayValue = isset($value['VALUE']) ? (string)$value['VALUE'] : '';
+        // В админке также используем кнопку
+        return static::getPublicViewHTML($field, $value, $additional);
+    }
 
-        return sprintf(
-            '<input type="text" name="%s" value="%s" size="20" />',
-            $htmlName,
-            htmlspecialcharsbx($displayValue)
-        );
+    /**
+     * HTML для просмотра в админке (форма редактирования записи).
+     *
+     * @param array       $field
+     * @param array|null  $value
+     * @param array       $additional
+     *
+     * @return string
+     */
+    public static function getViewHTML(array $field, ?array $value, array $additional = []): string
+    {
+        // В админке используем тот же рендеринг, что и в публичной части
+        return static::getPublicViewHTML($field, $value, $additional);
     }
 
     /**
@@ -98,39 +124,97 @@ class BpButtonUserType
      *
      * @return string
      */
-    public static function getPublicViewHTML(array $field, ?array $value, array $additional): string
+    public static function getPublicViewHTML(array $field, ?array $value = null, array $additional = []): string
     {
+        // Нормализуем параметры - Bitrix24 может передавать их в разных форматах
+        // VIEW_CALLBACK передает только $field и $additional, без $value
+        if ($value === null) {
+            // Если значение не передано, пытаемся получить его из поля
+            if (isset($field['VALUE'])) {
+                if (is_array($field['VALUE'])) {
+                    $value = ['VALUE' => reset($field['VALUE'])];
+                } else {
+                    $value = ['VALUE' => $field['VALUE']];
+                }
+            } else {
+                $value = [];
+            }
+        }
+        if (!is_array($additional)) {
+            $additional = [];
+        }
+        if (!is_array($field)) {
+            $field = [];
+        }
+        
+        // Отладка: логируем вызов метода (можно убрать после отладки)
+        if (function_exists('AddMessage2Log')) {
+            AddMessage2Log('BpButtonUserType::getPublicViewHTML called. Field ID: ' . ($field['ID'] ?? 'N/A') . ', Entity ID: ' . ($field['ENTITY_ID'] ?? 'N/A') . ', Has value: ' . (!empty($value) ? 'yes' : 'no'), 'my.bpbutton');
+        }
+
         // Подключаем стандартные UI‑стили и JS-логику кнопки только там, где реально отрисовано поле.
         if (class_exists(Extension::class)) {
-            Extension::load('ui.buttons');
-            Extension::load('my_bpbutton.button');
+            try {
+                Extension::load('ui.buttons');
+                Extension::load('my_bpbutton.button');
+            } catch (\Exception $e) {
+                // Игнорируем ошибки загрузки расширений
+            }
         }
 
         $buttonText = Loc::getMessage('BPBUTTON_USER_TYPE_BUTTON_TEXT')
-            ?: Loc::getMessage('BPBUTTON_USER_TYPE_NAME');
+            ?: Loc::getMessage('BPBUTTON_USER_TYPE_NAME')
+            ?: 'Кнопка';
 
-        $entityId = (string)($additional['ENTITY_ID'] ?? '');
-        $elementId = (string)($additional['ELEMENT_ID'] ?? '');
+        // Получаем ID сущности из поля или из дополнительных параметров
+        $entityId = (string)($field['ENTITY_ID'] ?? $additional['ENTITY_ID'] ?? '');
         $fieldId = (string)($field['ID'] ?? '');
+        
+        // Получаем ID элемента из разных источников
+        $elementId = '';
+        if (!empty($additional['ELEMENT_ID'])) {
+            $elementId = (string)$additional['ELEMENT_ID'];
+        } elseif (!empty($additional['VALUE'])) {
+            $elementId = (string)$additional['VALUE'];
+        } elseif (!empty($row['ID'] ?? null)) {
+            $elementId = (string)$row['ID'];
+        } elseif (!empty($_REQUEST['ID'])) {
+            $elementId = (string)$_REQUEST['ID'];
+        } elseif (!empty($GLOBALS['APPLICATION']->GetCurPageParam())) {
+            // Пытаемся извлечь ID из URL
+            $url = $GLOBALS['APPLICATION']->GetCurPageParam();
+            if (preg_match('/[?&]ID=(\d+)/', $url, $matches)) {
+                $elementId = $matches[1];
+            }
+        }
+        
         $userId = '';
 
-        if (is_array($additional['USER']) && isset($additional['USER']['ID'])) {
+        // Получаем ID пользователя
+        if (is_array($additional['USER'] ?? null) && isset($additional['USER']['ID'])) {
             $userId = (string)$additional['USER']['ID'];
         } elseif (isset($GLOBALS['USER']) && $GLOBALS['USER'] instanceof \CUser) {
             $userId = (string)$GLOBALS['USER']->GetID();
         } else {
-            $user = UserTable::getList([
-                'select' => ['ID'],
-                'limit' => 1,
-            ])->fetch();
+            try {
+                $user = UserTable::getList([
+                    'select' => ['ID'],
+                    'limit' => 1,
+                ])->fetch();
 
-            if ($user && isset($user['ID'])) {
-                $userId = (string)$user['ID'];
+                if ($user && isset($user['ID'])) {
+                    $userId = (string)$user['ID'];
+                }
+            } catch (\Exception $e) {
+                // Игнорируем ошибки получения пользователя
             }
         }
 
+        // Формируем HTML кнопки
+        $buttonId = 'bpbutton_' . uniqid();
         $attributes = [
             'type="button"',
+            'id="' . htmlspecialcharsbx($buttonId) . '"',
             'class="ui-btn ui-btn-primary js-bpbutton-field"',
             'data-entity-id="' . htmlspecialcharsbx($entityId) . '"',
             'data-element-id="' . htmlspecialcharsbx($elementId) . '"',
@@ -138,11 +222,49 @@ class BpButtonUserType
             'data-user-id="' . htmlspecialcharsbx($userId) . '"',
         ];
 
-        return sprintf(
-            '<button %s>%s</button>',
+        // Подключаем расширения и добавляем скрипт инициализации
+        $initScript = '';
+        if (class_exists(Extension::class)) {
+            try {
+                Extension::load('ui.buttons');
+                Extension::load('my_bpbutton.button');
+                
+                // Скрипт для инициализации кнопки
+                $initScript = '<script>
+                    (function() {
+                        function initButton() {
+                            if (typeof BX === "undefined" || !BX.MyBpButton || !BX.MyBpButton.Button) {
+                                setTimeout(initButton, 100);
+                                return;
+                            }
+                            var button = document.getElementById("' . htmlspecialcharsbx($buttonId) . '");
+                            if (button && !button.dataset.bpbuttonInit) {
+                                BX.MyBpButton.Button.bind(button);
+                            }
+                        }
+                        if (typeof BX !== "undefined" && BX.ready) {
+                            BX.ready(initButton);
+                        } else {
+                            setTimeout(initButton, 100);
+                        }
+                    })();
+                </script>';
+            } catch (\Exception $e) {
+                // Игнорируем ошибки
+            }
+        }
+
+        // Формируем HTML кнопки
+        $html = sprintf(
+            '<div class="bpbutton-field-wrapper" data-field-type="bp_button_field">
+                <button %s>%s</button>
+            </div>%s',
             implode(' ', $attributes),
-            htmlspecialcharsbx($buttonText)
+            htmlspecialcharsbx($buttonText),
+            $initScript
         );
+        
+        return $html;
     }
 
     /**
@@ -150,7 +272,7 @@ class BpButtonUserType
      *
      * Для MVP используем тот же UI, что и во "view": кнопка открывает SidePanel.
      */
-    public static function getPublicEditHTML(array $field, ?array $value, array $additional): string
+    public static function getPublicEditHTML(array $field, ?array $value, array $additional = []): string
     {
         return static::getPublicViewHTML($field, $value, $additional);
     }
@@ -158,22 +280,145 @@ class BpButtonUserType
     /**
      * Текстовое представление (например, для некоторых списков/экспорта).
      */
-    public static function getPublicTextHTML(array $field, ?array $value, array $additional): string
+    public static function getPublicTextHTML(array $field, ?array $value, array $additional = []): string
     {
-        return htmlspecialcharsbx(Loc::getMessage('BPBUTTON_USER_TYPE_BUTTON_TEXT') ?: (Loc::getMessage('BPBUTTON_USER_TYPE_NAME') ?: ''));
+        return htmlspecialcharsbx(Loc::getMessage('BPBUTTON_USER_TYPE_BUTTON_TEXT') ?: (Loc::getMessage('BPBUTTON_USER_TYPE_NAME') ?: 'Кнопка'));
     }
 
     /**
      * Multy-варианты: у нас поле логически одиночное, поэтому рендерим как одиночное.
      */
-    public static function getPublicViewHTMLMulty(array $field, ?array $value, array $additional): string
+    public static function getPublicViewHTMLMulty(array $field, ?array $value, array $additional = []): string
     {
         return static::getPublicViewHTML($field, $value, $additional);
     }
 
-    public static function getPublicEditHTMLMulty(array $field, ?array $value, array $additional): string
+    public static function getPublicEditHTMLMulty(array $field, ?array $value, array $additional = []): string
     {
         return static::getPublicEditHTML($field, $value, $additional);
+    }
+
+    /**
+     * HTML настроек поля в админке (форма создания/редактирования поля).
+     *
+     * Добавляем ссылку на страницу настроек модуля для управления кнопкой.
+     *
+     * @param array $field
+     * @param string $htmlControlName
+     * @param array $additional
+     *
+     * @return string
+     */
+    public static function getSettingsHTML(array $field, string $htmlControlName, array $additional): string
+    {
+        $fieldId = (int)($field['ID'] ?? 0);
+        
+        if ($fieldId > 0) {
+            // Если поле уже создано, показываем ссылку на настройки
+            $settingsUrl = '/bitrix/admin/my_bpbutton_bpbutton_list.php?lang=' . LANGUAGE_ID . '&ID=' . $fieldId . '&action=edit';
+            
+            return sprintf(
+                '<tr>
+                    <td colspan="2">
+                        <div style="margin: 10px 0;">
+                            <a href="%s" target="_blank" class="adm-btn">Настроить кнопку</a>
+                            <span style="margin-left: 10px; color: #666;">
+                                Настройте URL обработчика, заголовок и другие параметры кнопки
+                            </span>
+                        </div>
+                    </td>
+                </tr>',
+                htmlspecialcharsbx($settingsUrl)
+            );
+        }
+        
+        return '<tr><td colspan="2"><div style="margin: 10px 0; color: #666;">После создания поля вы сможете настроить параметры кнопки в разделе настроек модуля.</div></td></tr>';
+    }
+
+    /**
+     * Подготовка настроек поля перед сохранением.
+     *
+     * Bitrix24 передает только один параметр - массив $field,
+     * в котором настройки находятся в ключе 'SETTINGS'.
+     *
+     * @param array $field Массив с данными поля, включая 'SETTINGS'
+     *
+     * @return array Массив настроек
+     */
+    public static function prepareSettings(array $field): array
+    {
+        // Извлекаем настройки из поля, если они есть
+        $settings = $field['SETTINGS'] ?? [];
+        
+        // Возвращаем настройки как есть, без изменений.
+        return is_array($settings) ? $settings : [];
+    }
+
+    /**
+     * Рендеринг поля через компонент (новый подход D7).
+     *
+     * Используется Bitrix24 для рендеринга поля через компонент.
+     *
+     * @param array $userField
+     * @param array|null $additionalParameters
+     * @return string
+     */
+    public static function renderField(array $userField, ?array $additionalParameters = []): string
+    {
+        global $APPLICATION;
+
+        // Логируем вызов метода
+        if (function_exists('AddMessage2Log')) {
+            AddMessage2Log('BpButtonUserType::renderField called. Component: ' . self::RENDER_COMPONENT, 'my.bpbutton');
+        }
+
+        // Используем компонент для рендеринга (как в BaseType::getHtml)
+        // BaseUfComponent ожидает ~userField в arParams
+        ob_start();
+        $APPLICATION->IncludeComponent(
+            self::RENDER_COMPONENT,
+            '',
+            [
+                '~userField' => $userField,
+                'additionalParameters' => $additionalParameters ?? [],
+            ],
+            null,
+            ['HIDE_ICONS' => 'Y']
+        );
+        $html = ob_get_clean();
+
+        // Логируем результат
+        if (function_exists('AddMessage2Log')) {
+            AddMessage2Log('BpButtonUserType::renderField result length: ' . strlen($html), 'my.bpbutton');
+        }
+
+        return $html;
+    }
+
+    /**
+     * Рендеринг поля в режиме просмотра (новый подход D7).
+     *
+     * @param array $userField
+     * @param array|null $additionalParameters
+     * @return string
+     */
+    public static function renderView(array $userField, ?array $additionalParameters = []): string
+    {
+        $additionalParameters['mode'] = 'main.view';
+        return static::renderField($userField, $additionalParameters);
+    }
+
+    /**
+     * Рендеринг поля в режиме редактирования (новый подход D7).
+     *
+     * @param array $userField
+     * @param array|null $additionalParameters
+     * @return string
+     */
+    public static function renderEdit(array $userField, ?array $additionalParameters = []): string
+    {
+        $additionalParameters['mode'] = 'main.edit';
+        return static::renderField($userField, $additionalParameters);
     }
 }
 
