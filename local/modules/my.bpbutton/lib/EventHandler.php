@@ -107,27 +107,36 @@ class EventHandler
     }
 
     /**
-     * Определить ENTITY_ID по URL страницы CRM (детали сущности).
+     * Определить ENTITY_ID (пространство полей) по URL страницы CRM.
+     * Для смарт-процессов использует CCrmOwnerType::ResolveUserFieldEntityID — возвращает
+     * реальный ENTITY_ID полей (например CRM_4), а не CRM_DYNAMIC_1038.
      *
      * @param string $requestUri REQUEST_URI
-     * @return string|null CRM_LEAD, CRM_DEAL, CRM_DYNAMIC_123 и т.д. или null
+     * @return string|null CRM_LEAD, CRM_4 и т.д. или null
      */
-    private static function resolveEntityIdFromCrmDetailsUrl(string $requestUri): ?string
+    private static function resolveEntityIdFromCrmUrl(string $requestUri): ?string
     {
-        if (preg_match('#/crm/lead/details/#i', $requestUri)) {
+        // Учитываем /site_vl/, отсутствие trailing slash, category в пути
+        if (preg_match('#/crm/lead/(details|list)(/|$|\?|#)#i', $requestUri)) {
             return 'CRM_LEAD';
         }
-        if (preg_match('#/crm/deal/details/#i', $requestUri)) {
+        if (preg_match('#/crm/deal/(details|list)(/|$|\?|#)#i', $requestUri)) {
             return 'CRM_DEAL';
         }
-        if (preg_match('#/crm/contact/details/#i', $requestUri)) {
+        if (preg_match('#/crm/contact/(details|list)(/|$|\?|#)#i', $requestUri)) {
             return 'CRM_CONTACT';
         }
-        if (preg_match('#/crm/company/details/#i', $requestUri)) {
+        if (preg_match('#/crm/company/(details|list)(/|$|\?|#)#i', $requestUri)) {
             return 'CRM_COMPANY';
         }
-        if (preg_match('#/crm/type/(\d+)/details/#i', $requestUri, $m)) {
-            return 'CRM_DYNAMIC_' . (int)$m[1];
+        // Смарт-процессы: /crm/type/1038/, /crm/type/1038/0/details/1/, /crm/type/1038/list/
+        if (preg_match('#/crm/type/(\d+)(/[^/]+)?(/(details|list))?(/|$|\?|#)#i', $requestUri, $m)) {
+            $entityTypeId = (int)$m[1];
+            if ($entityTypeId > 0 && Loader::includeModule('crm') && class_exists('\CCrmOwnerType')) {
+                $ufEntityId = \CCrmOwnerType::ResolveUserFieldEntityID($entityTypeId);
+                return $ufEntityId !== '' ? $ufEntityId : null;
+            }
+            return 'CRM_DYNAMIC_' . $entityTypeId;
         }
         return null;
     }
@@ -147,30 +156,56 @@ class EventHandler
         self::ensureButtonSizeColumnExists();
         self::ensureBpLaunchColumnsExist();
         self::ensureHideBpTabColumnExists();
-        // Подключаем на страницах CRM, админки и настройки полей (config, userfield)
+        // Подключаем на страницах карточек CRM (details), админки и настройки полей
+        // НЕ на списках — иначе ui.entity-editor грузится глобально и может ломать CRM
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-        $isCrm = stripos($requestUri, '/crm/') !== false || stripos($requestUri, 'crm.') !== false;
+        $isCrmDetails = (stripos($requestUri, '/crm/') !== false || stripos($requestUri, 'crm.') !== false)
+            && stripos($requestUri, '/details') !== false;
         $isAdmin = stripos($requestUri, '/bitrix/admin/') !== false;
         $isFieldConfig = stripos($requestUri, 'userfield') !== false
             || stripos($requestUri, 'field.config') !== false
             || stripos($requestUri, 'main.field.config') !== false;
-        if (!$isCrm && !$isAdmin && !$isFieldConfig) {
+        if (!$isCrmDetails && !$isAdmin && !$isFieldConfig) {
             return;
         }
 
         try {
             Extension::load('my_bpbutton.entity_editor');
 
-            // TASK-014-A: скрытие вкладки «Бизнес-процессы» на страницах деталей CRM
-            if ($isCrm) {
-                $entityId = self::resolveEntityIdFromCrmDetailsUrl($requestUri);
+            // TASK-014-A: скрытие вкладки «Бизнес-процессы» на страницах карточек CRM
+            if ($isCrmDetails) {
+                $entityId = self::resolveEntityIdFromCrmUrl($requestUri);
                 if ($entityId !== null) {
                     $repository = new \My\BpButton\Repository\SettingsRepository();
-                    if ($repository->shouldHideBpTabForEntity($entityId)) {
+                    $shouldHide = $repository->shouldHideBpTabForEntity($entityId);
+                    // Временная отладка: ?debug_bpbutton=1 — в HTML-комментарий
+                    $debug = ($_GET['debug_bpbutton'] ?? '') === '1';
+                    if ($debug) {
                         $GLOBALS['APPLICATION']->AddHeadString(
-                            '<script>window.MY_BPBUTTON_HIDE_BP_TAB=true;</script>',
+                            '<!-- MY_BPBUTTON: entityId=' . htmlspecialchars($entityId) . ', shouldHide=' . ($shouldHide ? 'Y' : 'N') . ', uri=' . htmlspecialchars($requestUri) . ' -->',
                             true
                         );
+                    }
+                    if ($shouldHide) {
+                        $debug = ($_GET['debug_bpbutton'] ?? '') === '1';
+                        // CSS скрывает сразу при рендере — не зависит от JS
+                        $css = '<style id="my-bpbutton-hide-bp-tab">'
+                            . '[data-tab-id="tab_bizproc"],#tab_bizproc,[data-id="tab_bizproc"],'
+                            . '.main-buttons-item[data-id="tab_bizproc"],'
+                            . '#crm_entity_bp_starter,.crm-entity-bizproc-container,'
+                            . '.crm-entity-section[data-tab-id="tab_bizproc"]{display:none!important;visibility:hidden!important;pointer-events:none!important}</style>';
+                        $GLOBALS['APPLICATION']->AddHeadString($css, true);
+                        // JS — дублирует на случай динамической подгрузки (слайдер, lazy tabs)
+                        $script = '<script>'
+                            . 'window.MY_BPBUTTON_HIDE_BP_TAB=true;'
+                            . ($debug ? "console.log('[MY_BPBUTTON] HIDE_BP_TAB, entity=" . json_encode($entityId) . "');" : '')
+                            . 'function _bpHide(){var sel="[data-tab-id=tab_bizproc],#tab_bizproc,[data-id=tab_bizproc],.main-buttons-item[data-id=tab_bizproc],#crm_entity_bp_starter,.crm-entity-bizproc-container,.crm-entity-section[data-tab-id=tab_bizproc]";var s=document.querySelectorAll(sel);for(var i=0;i<s.length;i++){var e=s[i];e.style.setProperty("display","none","important");e.style.setProperty("visibility","hidden","important");e.style.setProperty("pointer-events","none","important");e.setAttribute("aria-hidden","true");}}'
+                            . '_bpHide();'
+                            . 'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_bpHide);'
+                            . '[200,400,600,1000,2000,4000,6000].forEach(function(d){setTimeout(_bpHide,d);});'
+                            . 'if(typeof MutationObserver!=="undefined"&&document.documentElement){var o=new MutationObserver(_bpHide);o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(function(){o.disconnect();},30e3);}'
+                            . '</script>';
+                        $GLOBALS['APPLICATION']->AddHeadString($script, true);
                     }
                 }
             }

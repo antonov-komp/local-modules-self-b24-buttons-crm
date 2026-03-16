@@ -10,6 +10,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
 use My\BpButton\Helper\CrmAccessChecker;
 use My\BpButton\Helper\SecurityHelper;
+use My\BpButton\Repository\SettingsRepository;
 use My\BpButton\Service\ButtonService;
 
 Loc::loadMessages(__FILE__);
@@ -76,6 +77,26 @@ final class ButtonController extends Controller
             );
             return $this->errorResponse('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
         }
+    }
+
+    /**
+     * TASK-014-A: проверка, нужно ли скрывать вкладку «Бизнес-процессы» для сущности.
+     * Вызывается из entity-editor.js по data-entity-id кнопки на странице.
+     *
+     * @param string $entityId ENTITY_ID (CRM_4, CRM_LEAD и т.д.)
+     * @return array{shouldHide: bool}
+     */
+    public function getShouldHideBpTabAction(string $entityId): array
+    {
+        $entityId = trim($entityId);
+        $shouldHide = false;
+
+        if ($entityId !== '' && Loader::includeModule('my.bpbutton')) {
+            $repository = new SettingsRepository();
+            $shouldHide = $repository->shouldHideBpTabForEntity($entityId);
+        }
+
+        return ['shouldHide' => $shouldHide];
     }
 
     private function getCurrentUserId(): int
