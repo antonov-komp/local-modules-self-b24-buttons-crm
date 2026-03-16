@@ -299,6 +299,7 @@ class BpButtonUserType
             'type="button"',
             'id="' . htmlspecialcharsbx($buttonId) . '"',
             'class="ui-btn ui-btn-primary js-bpbutton-field"',
+            'data-editor-control-type="button"',
             'data-entity-id="' . htmlspecialcharsbx($entityId) . '"',
             'data-element-id="' . htmlspecialcharsbx($elementId) . '"',
             'data-field-id="' . htmlspecialcharsbx($fieldId) . '"',
