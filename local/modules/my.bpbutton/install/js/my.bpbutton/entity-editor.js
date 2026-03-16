@@ -1,6 +1,16 @@
 ;(function () {
 	'use strict';
 
+	// Отладка в консоль: true = ВКЛ, false = ВЫКЛ (переключить в коде)
+	var MY_BPBUTTON_DEBUG = false;
+	var _log = function () {
+		if (MY_BPBUTTON_DEBUG && console && console.log) {
+			var w; try { w = window.top.console; } catch(e) { w = console; }
+			w.log.apply(w, ['[MY_BPBUTTON]'].concat(Array.prototype.slice.call(arguments)));
+		}
+	};
+	if (MY_BPBUTTON_DEBUG) _log('Debug ON');
+
 	if (typeof BX === 'undefined') {
 		return;
 	}
@@ -103,116 +113,4 @@
 	BX.ready(patchEntityEditorUserField);
 	}
 
-	// TASK-014-A: скрытие вкладки «Бизнес-процессы» в карточке CRM
-	// Определяем entityId по data-entity-id кнопки на странице и проверяем через API
-	(function initHideBpTab() {
-		try {
-			var BP_TAB_SEL = '[data-tab-id="tab_bizproc"],#tab_bizproc,[data-id="tab_bizproc"],.main-buttons-item[data-id="tab_bizproc"],#crm_entity_bp_starter,.crm-entity-bizproc-container,.crm-entity-section[data-tab-id="tab_bizproc"]';
-			var _bpTabHidden = false;
-			var _bpTabChecked = false;
-			var _applyHideInterval = null;
-
-			function hideBpTab() {
-				try {
-					var all = document.querySelectorAll(BP_TAB_SEL);
-					for (var j = 0; j < all.length; j++) {
-						var el = all[j];
-						el.style.setProperty('display', 'none', 'important');
-						el.style.setProperty('visibility', 'hidden', 'important');
-						el.style.setProperty('pointer-events', 'none', 'important');
-						el.setAttribute('aria-hidden', 'true');
-					}
-					if (all.length > 0 && window.location.search.indexOf('debug_bpbutton=1') >= 0) {
-						console.log('[MY_BPBUTTON] Hiding BP tab, count=', all.length);
-					}
-				} catch (e) { /* ignore */ }
-			}
-
-			function applyHide() {
-				if (_bpTabHidden) hideBpTab();
-			}
-
-			function startApplyHideInterval() {
-				if (_applyHideInterval) return;
-				_applyHideInterval = setInterval(applyHide, 500);
-				setTimeout(function() {
-					clearInterval(_applyHideInterval);
-					_applyHideInterval = null;
-				}, 12000);
-			}
-
-			function checkAndHide() {
-				if (_bpTabChecked) return;
-				var btn = document.querySelector('.js-bpbutton-field, .bpbutton-field-wrapper [data-entity-id]');
-				var entityId = btn && btn.getAttribute && btn.getAttribute('data-entity-id');
-				if (!entityId || entityId === '') return;
-
-				_bpTabChecked = true;
-				if (typeof BX.ajax !== 'function') return;
-				BX.ajax({
-					url: '/bitrix/services/my.bpbutton/button/ajax.php',
-					method: 'POST',
-					dataType: 'json',
-					data: {
-						action: 'getShouldHideBpTab',
-						entityId: entityId,
-						sessid: (BX.bitrix_sessid ? BX.bitrix_sessid() : '')
-					},
-					onsuccess: function(res) {
-						if (res && res.shouldHide === true) {
-							_bpTabHidden = true;
-							hideBpTab();
-							[200, 400, 600, 1000, 2000, 4000, 6000, 8000].forEach(function(ms) {
-								setTimeout(applyHide, ms);
-							});
-							startApplyHideInterval();
-						}
-					},
-					onfailure: function() {
-						if (window.location.search.indexOf('debug_bpbutton=1') >= 0) {
-							console.warn('[MY_BPBUTTON] getShouldHideBpTab API failed');
-						}
-					}
-				});
-			}
-
-			function runCheck() {
-				try {
-					checkAndHide();
-					if (_bpTabHidden) applyHide();
-				} catch (e) { /* ignore */ }
-			}
-
-			function setupObserver() {
-				if (typeof MutationObserver === 'undefined' || !document.body) return;
-				try {
-					var t = 0;
-					var obs = new MutationObserver(function() {
-						if (t) return;
-						t = setTimeout(function() { t = 0; runCheck(); }, 150);
-					});
-					obs.observe(document.body, { childList: true, subtree: true });
-					setTimeout(function() { obs.disconnect(); }, 30000);
-				} catch (e) { /* ignore */ }
-			}
-
-			runCheck();
-			if (document.readyState === 'loading') {
-				document.addEventListener('DOMContentLoaded', function() {
-					runCheck();
-					setupObserver();
-				});
-			} else {
-				setupObserver();
-			}
-			BX.ready(runCheck);
-			[300, 600, 1000, 2000, 3000, 5000].forEach(function(ms) {
-				setTimeout(runCheck, ms);
-			});
-		} catch (e) {
-			if (window.location.search.indexOf('debug_bpbutton=1') >= 0) {
-				console.error('[MY_BPBUTTON] initHideBpTab error:', e);
-			}
-		}
-	})();
 })();

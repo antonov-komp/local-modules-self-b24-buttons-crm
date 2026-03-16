@@ -12,6 +12,9 @@ use My\BpButton\UserField\BpButtonUserType;
 
 class EventHandler
 {
+    /** Отладка HIDE_BP_TAB: true = логи в консоль, false = выкл */
+    private const DEBUG_BP_TAB = false;
+
     /**
      * Миграция: добавление колонки BUTTON_TEXT в my_bpbutton_settings для существующих установок.
      */
@@ -159,8 +162,11 @@ class EventHandler
         // Подключаем на страницах карточек CRM (details), админки и настройки полей
         // НЕ на списках — иначе ui.entity-editor грузится глобально и может ломать CRM
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-        $isCrmDetails = (stripos($requestUri, '/crm/') !== false || stripos($requestUri, 'crm.') !== false)
-            && stripos($requestUri, '/details') !== false;
+        $hasCrm = stripos($requestUri, '/crm/') !== false || stripos($requestUri, 'crm.') !== false;
+        $isCrmDetails = $hasCrm && (
+            stripos($requestUri, '/details') !== false
+            || preg_match('#/crm/(?:lead|deal|contact|company|type/\d+)/\d+#i', $requestUri)
+        );
         $isAdmin = stripos($requestUri, '/bitrix/admin/') !== false;
         $isFieldConfig = stripos($requestUri, 'userfield') !== false
             || stripos($requestUri, 'field.config') !== false
@@ -171,44 +177,6 @@ class EventHandler
 
         try {
             Extension::load('my_bpbutton.entity_editor');
-
-            // TASK-014-A: скрытие вкладки «Бизнес-процессы» на страницах карточек CRM
-            if ($isCrmDetails) {
-                $entityId = self::resolveEntityIdFromCrmUrl($requestUri);
-                if ($entityId !== null) {
-                    $repository = new \My\BpButton\Repository\SettingsRepository();
-                    $shouldHide = $repository->shouldHideBpTabForEntity($entityId);
-                    // Временная отладка: ?debug_bpbutton=1 — в HTML-комментарий
-                    $debug = ($_GET['debug_bpbutton'] ?? '') === '1';
-                    if ($debug) {
-                        $GLOBALS['APPLICATION']->AddHeadString(
-                            '<!-- MY_BPBUTTON: entityId=' . htmlspecialchars($entityId) . ', shouldHide=' . ($shouldHide ? 'Y' : 'N') . ', uri=' . htmlspecialchars($requestUri) . ' -->',
-                            true
-                        );
-                    }
-                    if ($shouldHide) {
-                        $debug = ($_GET['debug_bpbutton'] ?? '') === '1';
-                        // CSS скрывает сразу при рендере — не зависит от JS
-                        $css = '<style id="my-bpbutton-hide-bp-tab">'
-                            . '[data-tab-id="tab_bizproc"],#tab_bizproc,[data-id="tab_bizproc"],'
-                            . '.main-buttons-item[data-id="tab_bizproc"],'
-                            . '#crm_entity_bp_starter,.crm-entity-bizproc-container,'
-                            . '.crm-entity-section[data-tab-id="tab_bizproc"]{display:none!important;visibility:hidden!important;pointer-events:none!important}</style>';
-                        $GLOBALS['APPLICATION']->AddHeadString($css, true);
-                        // JS — дублирует на случай динамической подгрузки (слайдер, lazy tabs)
-                        $script = '<script>'
-                            . 'window.MY_BPBUTTON_HIDE_BP_TAB=true;'
-                            . ($debug ? "console.log('[MY_BPBUTTON] HIDE_BP_TAB, entity=" . json_encode($entityId) . "');" : '')
-                            . 'function _bpHide(){var sel="[data-tab-id=tab_bizproc],#tab_bizproc,[data-id=tab_bizproc],.main-buttons-item[data-id=tab_bizproc],#crm_entity_bp_starter,.crm-entity-bizproc-container,.crm-entity-section[data-tab-id=tab_bizproc]";var s=document.querySelectorAll(sel);for(var i=0;i<s.length;i++){var e=s[i];e.style.setProperty("display","none","important");e.style.setProperty("visibility","hidden","important");e.style.setProperty("pointer-events","none","important");e.setAttribute("aria-hidden","true");}}'
-                            . '_bpHide();'
-                            . 'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_bpHide);'
-                            . '[200,400,600,1000,2000,4000,6000].forEach(function(d){setTimeout(_bpHide,d);});'
-                            . 'if(typeof MutationObserver!=="undefined"&&document.documentElement){var o=new MutationObserver(_bpHide);o.observe(document.documentElement,{childList:true,subtree:true});setTimeout(function(){o.disconnect();},30e3);}'
-                            . '</script>';
-                        $GLOBALS['APPLICATION']->AddHeadString($script, true);
-                    }
-                }
-            }
         } catch (\Throwable $e) {
             SecurityHelper::safeLog($e, 'my.bpbutton', 'EventHandler::onMainProlog');
         }
