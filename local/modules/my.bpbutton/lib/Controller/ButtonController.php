@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace My\BpButton\Controller;
 
-use Bitrix\Crm\Security\EntityAuthorization;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
+use My\BpButton\Helper\CrmAccessChecker;
 use My\BpButton\Helper\SecurityHelper;
 use My\BpButton\Service\ButtonService;
 
@@ -16,137 +16,136 @@ Loc::loadMessages(__FILE__);
 
 final class ButtonController extends Controller
 {
+    private ?ButtonService $service = null;
+    private ?CrmAccessChecker $crmAccessChecker = null;
+
     public function getConfigAction(string $entityId, int $elementId, int $fieldId): array
     {
-        $userId = 0;
-        if (isset($GLOBALS['USER']) && $GLOBALS['USER'] instanceof \CUser) {
-            $userId = (int)$GLOBALS['USER']->GetID();
+        $userId = $this->getCurrentUserId();
+
+        if (!$this->validateSession()) {
+            return $this->errorResponse('INVALID_SESSION', Loc::getMessage('MY_BPBUTTON_CTRL_INVALID_SESSION'));
         }
 
-        try {
-            if (!check_bitrix_sessid()) {
-                return $this->error('INVALID_SESSION', Loc::getMessage('MY_BPBUTTON_CTRL_INVALID_SESSION'));
-            }
+        if (!$this->loadRequiredModules()) {
+            return $this->errorResponse('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
+        }
 
-            if (!Loader::includeModule('crm')) {
-                return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
-            }
-
-            if (!Loader::includeModule('my.bpbutton')) {
-                return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
-            }
-
-            if (!$this->canReadCrmEntity($entityId, $elementId)) {
-                $service = new ButtonService();
-                $service->logClick(
-                    [
-                        'fieldId' => $fieldId,
-                        'entityId' => $entityId,
-                        'elementId' => $elementId,
-                        'userId' => $userId,
-                    ],
-                    'ACCESS_DENIED',
-                    'Нет прав на чтение CRM-сущности'
-                );
-
-                return $this->error('ACCESS_DENIED', Loc::getMessage('MY_BPBUTTON_CTRL_ACCESS_DENIED'));
-            }
-
-            $service = new ButtonService();
-            $result = $service->getSidePanelConfig($entityId, $elementId, $fieldId, $userId);
-
-            if (isset($result['success']) && $result['success'] === true) {
-                $context = $result['data']['context'] ?? [
+        if (!$this->checkCrmAccess($entityId, $elementId)) {
+            $this->getService()->logClick(
+                [
                     'fieldId' => $fieldId,
                     'entityId' => $entityId,
                     'elementId' => $elementId,
                     'userId' => $userId,
-                ];
-                $service->logClick($context, 'SUCCESS', null);
-                return $result;
-            }
+                ],
+                'ACCESS_DENIED',
+                'Нет прав на чтение CRM-сущности'
+            );
+            return $this->errorResponse('ACCESS_DENIED', Loc::getMessage('MY_BPBUTTON_CTRL_ACCESS_DENIED'));
+        }
 
-            if (isset($result['success']) && $result['success'] === false) {
-                $code = (string)($result['error']['code'] ?? 'ERROR');
-                $message = (string)($result['error']['message'] ?? '');
-                $service->logClick(
-                    [
-                        'fieldId' => $fieldId,
-                        'entityId' => $entityId,
-                        'elementId' => $elementId,
-                        'userId' => $userId,
-                    ],
-                    $code,
-                    $message
-                );
-                return $result;
-            }
-
-            return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
+        try {
+            $result = $this->getService()->getSidePanelConfig($entityId, $elementId, $fieldId, $userId);
+            $this->auditLogResult($result, $entityId, $elementId, $fieldId, $userId);
+            return $result;
         } catch (SystemException $e) {
-            // Безопасное логирование исключения (без чувствительных данных)
             SecurityHelper::safeLog($e, 'my.bpbutton', 'ButtonController::getConfigAction');
-            
-            if (Loader::includeModule('my.bpbutton')) {
-                (new ButtonService())->logClick(
-                    [
-                        'fieldId' => $fieldId,
-                        'entityId' => $entityId,
-                        'elementId' => $elementId,
-                        'userId' => $userId,
-                    ],
-                    'INTERNAL_ERROR',
-                    'Внутренняя ошибка при получении конфигурации'
-                );
-            }
-            return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
+            $this->getService()->logClick(
+                [
+                    'fieldId' => $fieldId,
+                    'entityId' => $entityId,
+                    'elementId' => $elementId,
+                    'userId' => $userId,
+                ],
+                'INTERNAL_ERROR',
+                'Внутренняя ошибка при получении конфигурации'
+            );
+            return $this->errorResponse('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
         } catch (\Throwable $e) {
-            // Безопасное логирование исключения (без чувствительных данных)
             SecurityHelper::safeLog($e, 'my.bpbutton', 'ButtonController::getConfigAction');
-            
-            if (Loader::includeModule('my.bpbutton')) {
-                (new ButtonService())->logClick(
-                    [
-                        'fieldId' => $fieldId,
-                        'entityId' => $entityId,
-                        'elementId' => $elementId,
-                        'userId' => $userId,
-                    ],
-                    'INTERNAL_ERROR',
-                    'Внутренняя ошибка при получении конфигурации'
-                );
-            }
-            return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
+            $this->getService()->logClick(
+                [
+                    'fieldId' => $fieldId,
+                    'entityId' => $entityId,
+                    'elementId' => $elementId,
+                    'userId' => $userId,
+                ],
+                'INTERNAL_ERROR',
+                'Внутренняя ошибка при получении конфигурации'
+            );
+            return $this->errorResponse('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
         }
     }
 
-    private function canReadCrmEntity(string $entityId, int $elementId): bool
+    private function getCurrentUserId(): int
     {
-        if ($elementId <= 0) {
-            return false;
+        if (isset($GLOBALS['USER']) && $GLOBALS['USER'] instanceof \CUser) {
+            return (int)$GLOBALS['USER']->GetID();
+        }
+        return 0;
+    }
+
+    private function validateSession(): bool
+    {
+        return check_bitrix_sessid();
+    }
+
+    private function loadRequiredModules(): bool
+    {
+        return Loader::includeModule('crm') && Loader::includeModule('my.bpbutton');
+    }
+
+    private function checkCrmAccess(string $entityId, int $elementId): bool
+    {
+        return $this->getCrmAccessChecker()->canRead($entityId, $elementId);
+    }
+
+    /**
+     * @param array $result Ответ getSidePanelConfig (success/error)
+     */
+    private function auditLogResult(array $result, string $entityId, int $elementId, int $fieldId, int $userId): void
+    {
+        $context = [
+            'fieldId' => $fieldId,
+            'entityId' => $entityId,
+            'elementId' => $elementId,
+            'userId' => $userId,
+        ];
+
+        if (isset($result['success']) && $result['success'] === true) {
+            $context['settingsId'] = $result['data']['context']['settingsId'] ?? 0;
+            $this->getService()->logClick($context, 'SUCCESS', null);
+            return;
         }
 
-        $entityTypeId = 0;
-        $normalized = mb_strtoupper(trim($entityId));
-        if ($normalized !== '' && ctype_digit($normalized)) {
-            $entityTypeId = (int)$normalized;
-        } elseif (preg_match('~^DYNAMIC_(\d+)$~', $normalized, $m)) {
-            $entityTypeId = (int)$m[1];
-        } elseif (class_exists(\CCrmOwnerType::class)) {
-            $entityTypeId = (int)\CCrmOwnerType::ResolveID($normalized);
+        if (isset($result['success']) && $result['success'] === false) {
+            $code = (string)($result['error']['code'] ?? 'ERROR');
+            $message = (string)($result['error']['message'] ?? '');
+            $this->getService()->logClick($context, $code, $message);
         }
+    }
 
-        if ($entityTypeId <= 0) {
-            return false;
+    private function getService(): ButtonService
+    {
+        if ($this->service === null) {
+            $this->service = new ButtonService();
         }
+        return $this->service;
+    }
 
-        return EntityAuthorization::checkReadPermission($entityTypeId, $elementId);
+    private function getCrmAccessChecker(): CrmAccessChecker
+    {
+        if ($this->crmAccessChecker === null) {
+            $this->crmAccessChecker = new CrmAccessChecker();
+        }
+        return $this->crmAccessChecker;
     }
 
     /**
      * @return array{success:false, error: array{code:string, message:string}}
      */
-    private function error(string $code, ?string $message): array
+    private function errorResponse(string $code, ?string $message): array
     {
         $message = (string)($message ?: Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
 
@@ -159,4 +158,3 @@ final class ButtonController extends Controller
         ];
     }
 }
-

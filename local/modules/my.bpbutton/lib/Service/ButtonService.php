@@ -9,12 +9,19 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use My\BpButton\Helper\SecurityHelper;
 use My\BpButton\Internals\LogsTable;
-use My\BpButton\Internals\SettingsTable;
+use My\BpButton\Repository\SettingsRepository;
 
 Loc::loadMessages(__FILE__);
 
 final class ButtonService
 {
+    private SettingsRepository $repository;
+
+    public function __construct(?SettingsRepository $repository = null)
+    {
+        $this->repository = $repository ?? new SettingsRepository();
+    }
+
     /**
      * @return array{
      *   url: string,
@@ -25,11 +32,7 @@ final class ButtonService
      */
     public function getSidePanelConfig(string $entityId, int $elementId, int $fieldId, int $userId): array
     {
-        $settings = SettingsTable::getList([
-            'select' => ['ID', 'FIELD_ID', 'ENTITY_ID', 'HANDLER_URL', 'TITLE', 'WIDTH', 'ACTIVE', 'UPDATED_AT'],
-            'filter' => ['=FIELD_ID' => $fieldId],
-            'limit' => 1,
-        ])->fetch();
+        $settings = $this->repository->getByFieldId($fieldId);
 
         if (!$settings) {
             return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_SETTINGS_NOT_FOUND') ?: 'Кнопка не настроена.');
@@ -97,12 +100,8 @@ final class ButtonService
             $status = trim($status);
 
             if ($settingsId <= 0 && $fieldId > 0) {
-                $row = SettingsTable::getList([
-                    'select' => ['ID'],
-                    'filter' => ['=FIELD_ID' => $fieldId],
-                    'limit' => 1,
-                ])->fetch();
-                $settingsId = (int)($row['ID'] ?? 0);
+                $row = $this->repository->getByFieldId($fieldId);
+                $settingsId = $row ? (int)($row['ID'] ?? 0) : 0;
             }
 
             if ($fieldId <= 0 || $entityId === '' || $elementId <= 0 || $userId <= 0 || $status === '') {

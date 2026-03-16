@@ -1,8 +1,6 @@
 ## Структура файлов модуля «BP Button Field»
 
-Документ описывает целевую файловую архитектуру модуля в `/local/modules/my.bpbutton/` и связанных директориях Bitrix24 (admin, js, css и т.п.).
-
-Это **референс‑структура**: фактическая реализация может отличаться в деталях, но должна сохранять общую логику и разделение слоёв.
+Документ описывает итоговую файловую архитектуру модуля в `/local/modules/my.bpbutton/` после рефакторинга (этапы 1–4, TASK-REF-001 … TASK-REF-004).
 
 ---
 
@@ -10,55 +8,50 @@
 
 ```text
 /local/modules/my.bpbutton/
-├── admin/                  # Административные скрипты и меню
-│   ├── bpbutton_list.php   # Реестр настроек кнопок (список)
-│   ├── bpbutton_edit.php   # Форма редактирования одной настройки (опционально SidePanel)
-│   ├── menu.php            # Подключение пункта меню «Кнопки БП»
-│   └── .access.php         # Права доступа к admin‑скриптам
-├── install/                # Установка и удаление модуля
-│   ├── index.php           # Класс модуля (CModule) и сценарий install/uninstall
-│   ├── step.php            # Шаги мастера установки (если используются)
-│   └── version.php         # Версия модуля
-├── lang/                   # Локализация
-│   ├── ru/
-│   │   ├── admin/
-│   │   │   ├── bpbutton_list.php
-│   │   │   └── bpbutton_edit.php
-│   │   ├── lib/
-│   │   │   ├── eventhandler.php
-│   │   │   └── userfield/
-│   │   │       └── bpbuttonusertype.php
-│   │   └── install/
-│   │       └── index.php
-│   └── .description.php    # Описание модуля (название, описание, партнёр)
-├── lib/                    # D7‑классы модуля
-│   ├── Internals/          # ORM‑сущности
-│   │   ├── SettingsTable.php
-│   │   └── LogsTable.php   # планируемая сущность логов
-│   ├── Service/            # Сервисный слой
-│   │   └── ButtonService.php
-│   ├── Controller/         # AJAX‑контроллеры (Engine)
+├── admin/                      # Административные скрипты и меню
+│   ├── bpbutton_list.php       # Реестр настроек кнопок (только список)
+│   ├── bpbutton_edit.php       # Форма редактирования одной настройки
+│   ├── bpbutton_list_ajax.php # AJAX toggle_active
+│   └── menu.php               # Пункт меню «Кнопки БП»
+├── install/                   # Установка и ресурсы модуля
+│   ├── index.php              # Класс модуля (CModule), install/uninstall
+│   ├── version.php            # Версия модуля
+│   ├── admin/                 # Прокси-файлы в /bitrix/admin/
+│   │   ├── my_bpbutton_bpbutton_list.php
+│   │   └── my_bpbutton_bpbutton_edit.php
+│   └── js/my.bpbutton/        # JS Extension my_bpbutton.button
+│       ├── button.js          # Точка входа
+│       ├── button.state.js
+│       ├── button.utils.js
+│       ├── button.api.js
+│       ├── button.sidepanel.js
+│       ├── admin.list.js
+│       └── entity-editor.js
+├── lang/                      # Локализация
+│   └── ru/
+│       ├── admin/
+│       ├── lib/
+│       └── install/
+├── lib/                       # D7-классы модуля
+│   ├── UserField/
+│   │   ├── BpButtonUserType.php    # Тонкая обёртка
+│   │   └── ButtonHtmlRenderer.php  # Генерация HTML кнопки
+│   ├── Service/
+│   │   ├── ButtonService.php
+│   │   ├── SettingsResolver.php     # Настройки отображения (BUTTON_TEXT, BUTTON_SIZE)
+│   │   └── SettingsFormService.php # Валидация и сохранение формы админки
+│   ├── Controller/
 │   │   └── ButtonController.php
-│   ├── UserField/          # Пользовательский тип поля
-│   │   └── BpButtonUserType.php
-│   └── EventHandler.php    # Регистрация user type и обработчиков событий
-├── tools/                  # Вспомогательные скрипты (если нужны)
-│   └── bpbutton_test.php   # Технические/отладочные endpoints
-├── options.php             # Страница настроек модуля (если предусматривается)
-└── include.php             # Точка подключения модуля, автозагрузка и т.п.
-```
-
-Дополнительно, вне директории модуля могут располагаться:
-
-```text
-/bitrix/admin/my_bpbutton_list.php      # прокси‑файл admin для модуля
-/bitrix/admin/my_bpbutton_edit.php
-
-/local/js/my.bpbutton/                  # JS‑расширения модуля (если используются)
-└── button.js
-
-/local/css/my.bpbutton/                 # CSS‑стили для UI (по минимуму, опираясь на UI Kit)
-└── button.css
+│   ├── Repository/
+│   │   └── SettingsRepository.php  # (опц.) Централизованный доступ к SettingsTable
+│   ├── Helper/
+│   │   ├── SecurityHelper.php
+│   │   └── CrmAccessChecker.php     # (опц.) Проверка прав CRM
+│   ├── Internals/
+│   │   ├── SettingsTable.php
+│   │   └── LogsTable.php
+│   └── EventHandler.php
+└── include.php               # Точка подключения модуля
 ```
 
 ---
@@ -67,195 +60,92 @@
 
 #### 2.1. `lib/`
 
-- `Internals/SettingsTable.php`
-  - D7‑определение таблицы `my_bpbutton_settings`.
-  - Содержит карту полей (`FIELD_ID`, `HANDLER_URL`, `TITLE`, `WIDTH`, `ACTIVE`, даты и т.п.).
+**UserField/**
+- `BpButtonUserType.php` — описание пользовательского типа `bp_button_field`, регистрация, делегирование в ButtonHtmlRenderer.
+- `ButtonHtmlRenderer.php` — генерация HTML кнопки с `data-*` атрибутами, использует SettingsResolver для BUTTON_TEXT, BUTTON_SIZE.
 
-- `Internals/LogsTable.php`
-  - D7‑определение таблицы `my_bpbutton_logs` (будущая версия).
+**Service/**
+- `ButtonService.php` — бизнес-логика: getSidePanelConfig, logClick, работа с SettingsTable и LogsTable.
+- `SettingsResolver.php` — получение настроек отображения (BUTTON_TEXT, BUTTON_SIZE) для UserField, с кешированием.
+- `SettingsFormService.php` — валидация и сохранение формы админки, toggleActive, getIdByFieldId.
 
-- `Service/ButtonService.php`
-  - Бизнес‑логика вокруг настроек кнопок:
-    - получение конфигурации по `FIELD_ID`;
-    - подготовка данных для SidePanel;
-    - (расширение) логирование кликов.
+**Controller/**
+- `ButtonController.php` — Bitrix\Main\Engine\Controller, getConfigAction: проверка сессии/прав, вызов ButtonService, возврат JSON.
 
-- `Controller/ButtonController.php`
-  - Реализация `Bitrix\Main\Engine\Controller`:
-    - `getConfigAction`;
-    - (расширение) `logClickAction` и др.
+**Repository/** (опционально)
+- `SettingsRepository.php` — централизованный доступ к SettingsTable для чтения.
 
-- `UserField/BpButtonUserType.php`
-  - Описание пользовательского типа `bp_button_field`:
-    - регистрация типа (через `OnUserTypeBuildList`);
-    - визуальные методы (`GetPublicViewHTML` и др.).
+**Helper/**
+- `SecurityHelper.php` — безопасное логирование, маскировка чувствительных данных.
+- `CrmAccessChecker.php` — проверка прав на чтение CRM-сущности (entityId, elementId).
 
-- `EventHandler.php`
-  - Обработчики событий ядра:
-    - регистрация user type;
-    - `OnAfterUserFieldAdd` (создание записи в `SettingsTable`);
-    - `OnUserFieldDelete` (очистка настроек/логов).
+**Internals/**
+- `SettingsTable.php` — D7 ORM для `my_bpbutton_settings`.
+- `LogsTable.php` — D7 ORM для `my_bpbutton_logs`.
+
+**EventHandler.php** — регистрация user type, OnAfterUserFieldAdd, OnUserFieldDelete.
 
 #### 2.2. `admin/`
 
-- `bpbutton_list.php`
-  - Реестр настроек кнопок:
-    - таблица на базе `CAdminList`/`CAdminUiList`;
-    - фильтры, сортировка, массовые действия.
-
-- `bpbutton_edit.php`
-  - Форма редактирования одной записи `my_bpbutton_settings`.
-
-- `menu.php`
-  - Регистрация пункта меню «Кнопки БП» в разделе «Настройки → Мои модули».
-
-- `.access.php`
-  - Ограничение доступа к admin‑файлам по правам модуля.
+- `bpbutton_list.php` — реестр настроек кнопок (CAdminUiList), фильтры, сортировка.
+- `bpbutton_edit.php` — форма редактирования одной записи, использует SettingsFormService.
+- `bpbutton_list_ajax.php` — обработчик AJAX для toggle_active.
+- `menu.php` — пункт меню «Настройки → Мои модули → Кнопки БП».
 
 #### 2.3. `install/`
 
-- `index.php`
-  - Класс модуля (`class my_bpbutton extends CModule`):
-    - методы `DoInstall`, `DoUninstall`;
-    - регистрация/снятие обработчиков событий;
-    - создание/удаление таблиц БД;
-    - копирование admin‑файлов‑прокси в `/bitrix/admin/`.
-
-- `version.php`
-  - Номер версии и дата для системной информации Bitrix.
+- `index.php` — класс модуля, InstallDB, InstallEvents, InstallFiles, InstallJS, InstallMenu.
+- `version.php` — версия и дата.
+- `admin/` — прокси-файлы, копируемые в `/bitrix/admin/`.
+- `js/my.bpbutton/` — JS Extension: button.js (точка входа), модули state, utils, api, sidepanel, admin.list, entity-editor.
 
 #### 2.4. `lang/`
 
-- Локализация для:
-  - admin‑страниц (`admin/bpbutton_list.php`, `admin/bpbutton_edit.php`, `menu.php`);
-  - классов `lib/` (user type, EventHandler, контроллеры);
-  - описания и настроек модуля (`install/index.php`, `options.php`).
+Локализация для admin, lib, install.
 
 ---
 
-### 3. Прокси‑admin‑файлы в `/bitrix/admin/`
+### 3. Прокси-admin-файлы в `/bitrix/admin/`
 
-Bitrix ожидает admin‑скрипты по пути `/bitrix/admin/*.php`. Рекомендуется использовать прокси:
+Bitrix ожидает admin-скрипты по пути `/bitrix/admin/*.php`. Модуль копирует прокси:
 
-```php
-<?php
-// /bitrix/admin/my_bpbutton_list.php
-require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/my.bpbutton/admin/bpbutton_list.php');
-```
-
-Такая схема:
-- сохраняет «чистоту» ядра (логика в `/local/modules/...`);
-- упрощает обновления и перенос модуля.
+- `my_bpbutton_bpbutton_list.php` → `require modules/my.bpbutton/admin/bpbutton_list.php`
+- `my_bpbutton_bpbutton_edit.php` → `require modules/my.bpbutton/admin/bpbutton_edit.php`
 
 ---
 
-### 4. JS и CSS ресурсы
+### 4. JS Extension
 
-- JS‑код работы кнопки:
-  - может жить в `/local/js/my.bpbutton/button.js`;
-  - подключается в карточке CRM через user type или через расширения Bitrix;
-  - реализует контракт, описанный в `../architecture/frontend_ui.md`.
-
-- CSS (по минимуму):
-  - `/local/css/my.bpbutton/button.css`;
-  - должен опираться на Bitrix24 UI Kit, а не заменять его.
-
-## Файловая структура модуля «BP Button Field» в `/local/modules`
-
-Целевая структура модуля в коробочной версии Битрикс24:
-
-```text
-/local/modules/my.bpbutton/
-├── install/
-│   ├── index.php                 # Логика установки/удаления модуля
-│   ├── version.php               # Версия модуля и информация о поставщике
-│   └── step.php                  # Мастер установки (при необходимости)
-├── lib/
-│   ├── Internals/
-│   │   ├── SettingsTable.php     # D7 ORM-сущность my_bpbutton_settings
-│   │   └── LogsTable.php         # (план) D7 ORM-сущность my_bpbutton_logs
-│   ├── Controller/
-│   │   └── ButtonController.php  # Bitrix\Main\Engine\Controller для AJAX‑запросов
-│   ├── Service/
-│   │   └── ButtonService.php     # Бизнес‑логика работы кнопок (конфигурация, условия, логирование)
-│   ├── UserField/
-│   │   └── BpButtonUserType.php  # Реализация пользовательского типа поля bp_button_field
-│   └── EventHandler.php          # Регистрация и обработка событий (OnUserTypeBuildList и др.)
-├── lang/
-│   └── ru/
-│       ├── install/index.php     # Языки для мастера установки
-│       ├── lib/…                 # Языковые файлы для классов (UserField, Service, Controller)
-│       ├── admin/bpbutton_list.php # Локализация колонок/кнопок в реестре
-│       └── options.php           # Языки для страницы настроек модуля
-├── options.php                   # Глобальные опции модуля (если требуются)
-└── admin/
-    ├── bpbutton_list.php         # Административный реестр полей «Кнопки БП»
-    ├── bpbutton_list_ajax.php    # (опц.) обработчики AJAX для списка/форм
-    └── menu.php                  # Пункт меню «Настройки → Мои модули → Кнопки БП»
-```
+- **ID:** `my.bpbutton.button`
+- **Точка входа:** `install/js/my.bpbutton/button.js`
+- **Модули:** button.state.js, button.utils.js, button.api.js, button.sidepanel.js, admin.list.js, entity-editor.js
+- **Подключение:** `Extension::load('my.bpbutton.button')` в карточке CRM / Entity Editor
 
 ---
 
-### Назначение ключевых директорий и файлов
+### 5. API
 
-#### `/install`
+- **Endpoint:** `/bitrix/services/my.bpbutton/button/ajax.php`
+- **Метод:** `ButtonController::getConfigAction`
+- **Формат ответов:** см. `api/response_format.md`
 
-- **`install/index.php`**  
-  - класс модуля (`class my_bpbutton extends CModule`), реализующий:
-    - `DoInstall()` — создание таблиц (`my_bpbutton_settings`, в будущем `my_bpbutton_logs`), регистрация событий (`OnUserTypeBuildList`, `OnAfterUserFieldAdd`, `OnUserFieldDelete`), установка admin‑файлов и меню;
-    - `DoUninstall()` — отписка от событий, удаление admin‑файлов и (опционально) таблиц/данных модуля.
-- **`install/version.php`**  
-  - массив с версией модуля, датой и информацией о разработчике;
-  - используется Bitrix для проверки обновлений.
-- **`install/step.php`** (по необходимости)  
-  - шаги мастера установки, если требуется интерактивный ввод параметров.
+---
 
-#### `/lib`
+### 6. Таблица namespaces и путей
 
-- **`lib/Internals/SettingsTable.php`**  
-  - ORM‑класс D7 для таблицы `my_bpbutton_settings`;
-  - слой данных для настроек кнопок (см. `architecture/data_model.md`).
-- **`lib/Internals/LogsTable.php`** (план)  
-  - ORM‑класс D7 для таблицы `my_bpbutton_logs`;
-  - хранение истории нажатий (см. `TASK-004-logging.md`).
-- **`lib/UserField/BpButtonUserType.php`**  
-  - реализация пользовательского типа поля `bp_button_field`;
-  - отвечает за описание типа и HTML‑представление кнопки в карточке CRM.
-- **`lib/Service/ButtonService.php`**  
-  - бизнес‑логика вокруг кнопок:
-    - получение настроек из `SettingsTable`;
-    - подготовка конфигурации SidePanel;
-    - (в будущем) запись логов через `LogsTable`.
-- **`lib/Controller/ButtonController.php`**  
-  - `Bitrix\Main\Engine\Controller` для AJAX‑запросов от JS‑расширения;
-  - проверяет сессию/права и возвращает конфигурацию SidePanel.
-- **`lib/EventHandler.php`**  
-  - регистрация и обработка событий:
-    - `OnUserTypeBuildList` — регистрация `bp_button_field`;
-    - `OnAfterUserFieldAdd` / `OnUserFieldDelete` — синхронизация с `SettingsTable`.
+| Класс | Namespace | Путь к файлу |
+|-------|-----------|--------------|
+| BpButtonUserType | My\BpButton\UserField | lib/UserField/BpButtonUserType.php |
+| ButtonHtmlRenderer | My\BpButton\UserField | lib/UserField/ButtonHtmlRenderer.php |
+| ButtonService | My\BpButton\Service | lib/Service/ButtonService.php |
+| SettingsResolver | My\BpButton\Service | lib/Service/SettingsResolver.php |
+| SettingsFormService | My\BpButton\Service | lib/Service/SettingsFormService.php |
+| ButtonController | My\BpButton\Controller | lib/Controller/ButtonController.php |
+| EventHandler | My\BpButton | lib/EventHandler.php |
+| SettingsTable | My\BpButton\Internals | lib/Internals/SettingsTable.php |
+| LogsTable | My\BpButton\Internals | lib/Internals/LogsTable.php |
+| SecurityHelper | My\BpButton\Helper | lib/Helper/SecurityHelper.php |
+| SettingsRepository | My\BpButton\Repository | lib/Repository/SettingsRepository.php |
+| CrmAccessChecker | My\BpButton\Helper | lib/Helper/CrmAccessChecker.php |
 
-#### `/lang`
-
-- Содержит локализации для всех PHP‑файлов модуля:
-  - строки для мастера установки, описаний типов полей, admin‑форм, сообщений об ошибках.
-
-#### `/admin`
-
-- **`admin/bpbutton_list.php`**  
-  - административный реестр полей «Кнопки БП»:
-    - отображает список записей `my_bpbutton_settings`;
-    - предоставляет формы редактирования настроек (URL, заголовок, ширина, активность).
-- **`admin/bpbutton_list_ajax.php`** (если используется)  
-  - обработчики AJAX‑действий для списка (массовые операции, быстрые правки).
-- **`admin/menu.php`**  
-  - описание пункта меню:
-    - раздел «Настройки → Мои модули → Кнопки БП»;
-    - привязка к правам модуля.
-
-#### `options.php`
-
-- Страница глобальных настроек модуля (если понадобятся):
-  - общие флаги, влияющие на поведение всех кнопок;
-  - использование стандартного механизма `CModule::IncludeModule` + `__AdmSettings*`.
-
-
+**Проверка:** Все пути соответствуют автозагрузке в `install/index.php` (Loader::registerAutoLoadClasses). Расхождений нет.

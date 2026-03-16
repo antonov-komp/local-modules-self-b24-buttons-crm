@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace My\BpButton\Service;
 
 use Bitrix\Main\Localization\Loc;
-use My\BpButton\Internals\SettingsTable;
+use My\BpButton\Repository\SettingsRepository;
 
 /**
  * Получение настроек отображения кнопки (BUTTON_TEXT, BUTTON_SIZE) по FIELD_ID
@@ -14,6 +14,12 @@ use My\BpButton\Internals\SettingsTable;
 final class SettingsResolver
 {
     private static array $cache = [];
+    private SettingsRepository $repository;
+
+    public function __construct(?SettingsRepository $repository = null)
+    {
+        $this->repository = $repository ?? new SettingsRepository();
+    }
 
     /**
      * Получить текст кнопки для поля.
@@ -61,11 +67,7 @@ final class SettingsResolver
 
         if (!isset(self::$cache[$fieldId])) {
             try {
-                $settingsRow = SettingsTable::getList([
-                    'select' => ['BUTTON_TEXT', 'BUTTON_SIZE'],
-                    'filter' => ['=FIELD_ID' => $fieldId],
-                    'limit' => 1,
-                ])->fetch();
+                $settingsRow = $this->repository->getByFieldId($fieldId);
 
                 if ($settingsRow) {
                     $buttonText = trim((string)($settingsRow['BUTTON_TEXT'] ?? ''));

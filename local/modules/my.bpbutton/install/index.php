@@ -102,6 +102,8 @@ class my_bpbutton extends CModule
             'My\\BpButton\\EventHandler' => 'lib/EventHandler.php',
             'My\\BpButton\\Internals\\SettingsTable' => 'lib/Internals/SettingsTable.php',
             'My\\BpButton\\Internals\\LogsTable' => 'lib/Internals/LogsTable.php',
+            'My\\BpButton\\Repository\\SettingsRepository' => 'lib/Repository/SettingsRepository.php',
+            'My\\BpButton\\Helper\\CrmAccessChecker' => 'lib/Helper/CrmAccessChecker.php',
             'My\\BpButton\\Service\\ButtonService' => 'lib/Service/ButtonService.php',
             'My\\BpButton\\Service\\SettingsResolver' => 'lib/Service/SettingsResolver.php',
             'My\\BpButton\\Service\\SettingsFormService' => 'lib/Service/SettingsFormService.php',
@@ -340,7 +342,13 @@ class my_bpbutton extends CModule
     {
         // Регистрация JS-расширения для кнопки в CRM
         CJSCore::RegisterExt('my_bpbutton.button', [
-            'js' => '/local/modules/my.bpbutton/install/js/my.bpbutton/button.js',
+            'js' => [
+                '/local/modules/my.bpbutton/install/js/my.bpbutton/button.state.js',
+                '/local/modules/my.bpbutton/install/js/my.bpbutton/button.utils.js',
+                '/local/modules/my.bpbutton/install/js/my.bpbutton/button.api.js',
+                '/local/modules/my.bpbutton/install/js/my.bpbutton/button.sidepanel.js',
+                '/local/modules/my.bpbutton/install/js/my.bpbutton/button.js',
+            ],
             'rel' => ['main.core', 'ui.buttons', 'ui.sidepanel', 'ui.notification'],
             'lang' => '/local/modules/my.bpbutton/lang/' . LANGUAGE_ID . '/install/js/my.bpbutton/button.php',
         ]);

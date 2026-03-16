@@ -7,6 +7,7 @@ namespace My\BpButton\Service;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\UpdateResult;
 use My\BpButton\Internals\SettingsTable;
+use My\BpButton\Repository\SettingsRepository;
 
 Loc::loadMessages(dirname(__DIR__, 2) . '/admin/bpbutton_list.php');
 
@@ -19,6 +20,12 @@ Loc::loadMessages(dirname(__DIR__, 2) . '/admin/bpbutton_list.php');
 class SettingsFormService
 {
     private const ALLOWED_BUTTON_SIZES = ['default', 'sm', 'lg'];
+    private SettingsRepository $repository;
+
+    public function __construct(?SettingsRepository $repository = null)
+    {
+        $this->repository = $repository ?? new SettingsRepository();
+    }
 
     /**
      * Валидация данных формы.
@@ -93,8 +100,7 @@ class SettingsFormService
      */
     public function getById(int $id): ?array
     {
-        $row = SettingsTable::getByPrimary($id)->fetch();
-        return $row ?: null;
+        return $this->repository->getById($id);
     }
 
     /**
@@ -105,11 +111,7 @@ class SettingsFormService
      */
     public function getIdByFieldId(int $fieldId): ?int
     {
-        $row = SettingsTable::getList([
-            'filter' => ['=FIELD_ID' => $fieldId],
-            'limit' => 1,
-        ])->fetch();
-
+        $row = $this->repository->getByFieldId($fieldId);
         return $row && !empty($row['ID']) ? (int)$row['ID'] : null;
     }
 

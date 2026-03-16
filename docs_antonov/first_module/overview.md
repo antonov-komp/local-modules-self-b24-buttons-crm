@@ -33,9 +33,11 @@
 ```text
 first_module/
 ├── overview.md               # Обзор, цели, сценарии и карта документации
+├── onboarding-checklist.md  # Чек-лист для новых разработчиков
 ├── requirements.md           # Бизнес- и функциональные требования к модулю
 ├── architecture/             # Архитектура модуля (D7, модель данных, безопасность, frontend-слой)
 │   ├── backend_d7.md         # Слои backend-а: ORM, сервисы, события, контроллеры
+│   ├── layers-diagram.md     # Схема слоёв и потоков данных
 │   ├── data_model.md         # Таблицы (my_bpbutton_settings, my_bpbutton_logs и др.), связи с CRM
 │   ├── security.md           # Политика прав, проверки сессий, безопасные паттерны
 │   └── frontend_ui.md        # Взаимодействие JS-слоя с кнопкой и SidePanel
@@ -47,9 +49,11 @@ first_module/
 │   ├── TASK-001-user-type.md # Регистрация и поведение user type `bp_button_field`
 │   ├── TASK-002-admin-grid.md# Админ-реестр полей и управление логикой кнопок
 │   ├── TASK-003-ajax-api.md  # AJAX-контроллер на Bitrix\Main\Engine\Controller
-│   └── TASK-004-logging.md   # Логирование нажатий и аудит
+│   ├── TASK-004-logging.md   # Логирование нажатий и аудит
+│   └── TASK-REF-*.md         # Рефакторинг (UserField, Admin, JS, Service, Docs)
 ├── api/                      # Документация API модуля
-│   ├── ajax_controller.md    # Спецификация контроллера (action-методы, JSON, ошибки)
+│   ├── ajax_controller.md   # Спецификация контроллера (action-методы, JSON, ошибки)
+│   ├── response_format.md   # Единый формат ответов API (success/error)
 │   └── events.md             # Список и описание используемых событий ядра/модуля
 ├── ui_ux/                    # UX/UI спецификации
 │   ├── crm_card_button.md    # Внешний вид и поведение кнопки в карточке CRM
@@ -59,4 +63,6 @@ first_module/
 │   └── cases.md              # Набор конкретных тест-кейсов (мануальных/авто)
 └── local_button.md           # Master-документ: бизнес-требования, фичи, связь «фича → TASK → слой»
 ```
+
+README модуля: `local/modules/my.bpbutton/README.md`
 
