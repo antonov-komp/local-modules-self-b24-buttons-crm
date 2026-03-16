@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace My\BpButton\Service;
 
+use Bitrix\Main\Diag\Debug;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
+use My\BpButton\Internals\LogsTable;
 use My\BpButton\Internals\SettingsTable;
 
 Loc::loadMessages(__FILE__);
@@ -16,7 +19,7 @@ final class ButtonService
      *   url: string,
      *   title: string,
      *   width: string|int,
-     *   context: array{entityId: string, elementId: int, fieldId: int, userId: int}
+     *   context: array{settingsId:int, entityId: string, elementId: int, fieldId: int, userId: int}
      * }
      */
     public function getSidePanelConfig(string $entityId, int $elementId, int $fieldId, int $userId): array
@@ -51,6 +54,7 @@ final class ButtonService
         }
 
         $context = [
+            'settingsId' => (int)($settings['ID'] ?? 0),
             'entityId' => $entityId,
             'elementId' => $elementId,
             'fieldId' => $fieldId,
@@ -71,7 +75,66 @@ final class ButtonService
     }
 
     /**
-     * @param array{entityId:string, elementId:int, fieldId:int, userId:int} $context
+     * Пишет деловой факт нажатия в таблицу логов.
+     *
+     * @param array{
+     *   settingsId?:int,
+     *   fieldId?:int,
+     *   entityId?:string,
+     *   elementId?:int,
+     *   userId?:int
+     * } $context
+     */
+    public function logClick(array $context, string $status, ?string $message = null): void
+    {
+        try {
+            $settingsId = (int)($context['settingsId'] ?? 0);
+            $fieldId = (int)($context['fieldId'] ?? 0);
+            $entityId = trim((string)($context['entityId'] ?? ''));
+            $elementId = (int)($context['elementId'] ?? 0);
+            $userId = (int)($context['userId'] ?? 0);
+            $status = trim($status);
+
+            if ($settingsId <= 0 && $fieldId > 0) {
+                $row = SettingsTable::getList([
+                    'select' => ['ID'],
+                    'filter' => ['=FIELD_ID' => $fieldId],
+                    'limit' => 1,
+                ])->fetch();
+                $settingsId = (int)($row['ID'] ?? 0);
+            }
+
+            if ($fieldId <= 0 || $entityId === '' || $elementId <= 0 || $userId <= 0 || $status === '') {
+                return;
+            }
+
+            $message = $this->sanitizeLogMessage($message);
+
+            LogsTable::add([
+                'SETTINGS_ID' => max(0, $settingsId),
+                'FIELD_ID' => $fieldId,
+                'ENTITY_ID' => $entityId,
+                'ELEMENT_ID' => $elementId,
+                'USER_ID' => $userId,
+                'STATUS' => mb_substr($status, 0, 50),
+                'MESSAGE' => $message,
+                'CREATED_AT' => new DateTime(),
+            ]);
+        } catch (\Throwable $e) {
+            // Логирование не должно ломать основной сценарий. Фиксируем только в техлог.
+            if (function_exists('AddMessage2Log')) {
+                AddMessage2Log(
+                    'my.bpbutton logClick failed: ' . $e->getMessage(),
+                    'my.bpbutton'
+                );
+            } else {
+                Debug::writeToFile($e->getMessage(), 'my.bpbutton logClick failed', 'my_bpbutton.log');
+            }
+        }
+    }
+
+    /**
+     * @param array{settingsId?:int, entityId:string, elementId:int, fieldId:int, userId:int} $context
      */
     private function appendContextToUrl(string $url, array $context): string
     {
@@ -103,6 +166,22 @@ final class ButtonService
                 'message' => $message,
             ],
         ];
+    }
+
+    private function sanitizeLogMessage(?string $message): ?string
+    {
+        $message = trim((string)($message ?? ''));
+        if ($message === '') {
+            return null;
+        }
+
+        // Убираем потенциально чувствительные query-параметры (минимальный безопасный фильтр).
+        $message = preg_replace('~([?&](?:auth|token|access_token|refresh_token|password|secret)=)[^&\s]+~iu', '$1***', $message) ?: $message;
+
+        // Ограничиваем размер, чтобы не раздувать логи.
+        $message = mb_substr($message, 0, 1000);
+
+        return $message;
     }
 }
 

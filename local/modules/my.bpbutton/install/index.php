@@ -48,6 +48,27 @@ class my_bpbutton extends CModule
             );
         }
 
+        $logsTableName = 'my_bpbutton_logs';
+        if (!$connection->isTableExists($logsTableName)) {
+            $connection->queryExecute(
+                'CREATE TABLE IF NOT EXISTS `' . $logsTableName . '` (
+                    `ID` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    `SETTINGS_ID` INT UNSIGNED NOT NULL DEFAULT 0,
+                    `FIELD_ID` INT UNSIGNED NOT NULL,
+                    `ENTITY_ID` VARCHAR(50) NOT NULL,
+                    `ELEMENT_ID` INT UNSIGNED NOT NULL,
+                    `USER_ID` INT UNSIGNED NOT NULL,
+                    `STATUS` VARCHAR(50) NOT NULL,
+                    `MESSAGE` TEXT NULL,
+                    `CREATED_AT` DATETIME NOT NULL,
+                    PRIMARY KEY (`ID`),
+                    KEY `IX_BPBTN_LOG_FIELD` (`FIELD_ID`),
+                    KEY `IX_BPBTN_LOG_ENTITY` (`ENTITY_ID`, `ELEMENT_ID`),
+                    KEY `IX_BPBTN_LOG_USER` (`USER_ID`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8;'
+            );
+        }
+
         RegisterModule($this->MODULE_ID);
         $this->InstallEvents();
     }

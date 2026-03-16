@@ -17,6 +17,11 @@ final class ButtonController extends Controller
 {
     public function getConfigAction(string $entityId, int $elementId, int $fieldId): array
     {
+        $userId = 0;
+        if (isset($GLOBALS['USER']) && $GLOBALS['USER'] instanceof \CUser) {
+            $userId = (int)$GLOBALS['USER']->GetID();
+        }
+
         try {
             if (!check_bitrix_sessid()) {
                 return $this->error('INVALID_SESSION', Loc::getMessage('MY_BPBUTTON_CTRL_INVALID_SESSION'));
@@ -26,34 +31,84 @@ final class ButtonController extends Controller
                 return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
             }
 
-            if (!$this->canReadCrmEntity($entityId, $elementId)) {
-                return $this->error('ACCESS_DENIED', Loc::getMessage('MY_BPBUTTON_CTRL_ACCESS_DENIED'));
-            }
-
             if (!Loader::includeModule('my.bpbutton')) {
                 return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
             }
 
-            $userId = 0;
-            if (isset($GLOBALS['USER']) && $GLOBALS['USER'] instanceof \CUser) {
-                $userId = (int)$GLOBALS['USER']->GetID();
+            if (!$this->canReadCrmEntity($entityId, $elementId)) {
+                $service = new ButtonService();
+                $service->logClick(
+                    [
+                        'fieldId' => $fieldId,
+                        'entityId' => $entityId,
+                        'elementId' => $elementId,
+                        'userId' => $userId,
+                    ],
+                    'ACCESS_DENIED',
+                    'Нет прав на чтение CRM-сущности'
+                );
+
+                return $this->error('ACCESS_DENIED', Loc::getMessage('MY_BPBUTTON_CTRL_ACCESS_DENIED'));
             }
 
             $service = new ButtonService();
             $result = $service->getSidePanelConfig($entityId, $elementId, $fieldId, $userId);
 
             if (isset($result['success']) && $result['success'] === true) {
+                $context = $result['data']['context'] ?? [
+                    'fieldId' => $fieldId,
+                    'entityId' => $entityId,
+                    'elementId' => $elementId,
+                    'userId' => $userId,
+                ];
+                $service->logClick($context, 'SUCCESS', null);
                 return $result;
             }
 
             if (isset($result['success']) && $result['success'] === false) {
+                $code = (string)($result['error']['code'] ?? 'ERROR');
+                $message = (string)($result['error']['message'] ?? '');
+                $service->logClick(
+                    [
+                        'fieldId' => $fieldId,
+                        'entityId' => $entityId,
+                        'elementId' => $elementId,
+                        'userId' => $userId,
+                    ],
+                    $code,
+                    $message
+                );
                 return $result;
             }
 
             return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
         } catch (SystemException $e) {
+            if (Loader::includeModule('my.bpbutton')) {
+                (new ButtonService())->logClick(
+                    [
+                        'fieldId' => $fieldId,
+                        'entityId' => $entityId,
+                        'elementId' => $elementId,
+                        'userId' => $userId,
+                    ],
+                    'INTERNAL_ERROR',
+                    $e->getMessage()
+                );
+            }
             return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
         } catch (\Throwable $e) {
+            if (Loader::includeModule('my.bpbutton')) {
+                (new ButtonService())->logClick(
+                    [
+                        'fieldId' => $fieldId,
+                        'entityId' => $entityId,
+                        'elementId' => $elementId,
+                        'userId' => $userId,
+                    ],
+                    'INTERNAL_ERROR',
+                    $e->getMessage()
+                );
+            }
             return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
         }
     }
