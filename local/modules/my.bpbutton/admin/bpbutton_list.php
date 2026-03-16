@@ -33,6 +33,13 @@ if ($moduleRight < 'R') {
 /** @var CMain $APPLICATION */
 $APPLICATION->SetTitle(Loc::getMessage('MY_BPBUTTON_LIST_PAGE_TITLE'));
 
+// CAdminSorting использует $_SERVER['REQUEST_URI'], а не GetCurPage().
+// При открытии в iframe/SidePanel REQUEST_URI может указывать на index.php — тогда
+// клик по столбцу открывает дубль админки. Задаём корректный URI явно.
+$adminPagePath = '/bitrix/admin/my_bpbutton_bpbutton_list.php';
+$APPLICATION->SetCurPage($adminPagePath);
+$_SERVER['REQUEST_URI'] = $adminPagePath . (($_SERVER['QUERY_STRING'] ?? '') !== '' ? '?' . $_SERVER['QUERY_STRING'] : '');
+
 $request = Application::getInstance()->getContext()->getRequest();
 $isPost = $request->isPost() && check_bitrix_sessid();
 
@@ -452,13 +459,35 @@ if ($pageCount > 1) {
 
 $lAdmin->CheckListMode();
 
+// Повторно задаём REQUEST_URI перед DisplayList (сортировка читает его при генерации onclick)
+$_SERVER['REQUEST_URI'] = $adminPagePath . (($_SERVER['QUERY_STRING'] ?? '') !== '' ? '?' . $_SERVER['QUERY_STRING'] : '');
+
 // Подключение JS-расширения для админ-списка
 if (class_exists(Extension::class)) {
     Extension::load('my_bpbutton.admin_list');
 }
 
+// Передаём корректный URL страницы для JS (исправление сортировки/фильтра при REQUEST_URI=index.php)
+?>
+<script>
+window.MY_BPBUTTON_LIST_PAGE_URL = <?= \CUtil::PhpToJSObject($adminPagePath . '?lang=' . LANGUAGE_ID) ?>;
+</script>
+<?php
+
 echo $navHtml;
+
+// Перехват вывода DisplayList: подмена index.php на нашу страницу в onclick (сортировка, фильтр)
+ob_start();
 $lAdmin->DisplayList();
+$listHtml = ob_get_clean();
+$correctListPath = '/bitrix/admin/my_bpbutton_bpbutton_list.php';
+$listHtml = preg_replace(
+    '#/bitrix/admin/index\.php#',
+    $correctListPath,
+    $listHtml
+);
+echo $listHtml;
+
 echo $navHtml;
 
 require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.php';

@@ -20,13 +20,81 @@
      */
     BX.MyBpButton = BX.MyBpButton || {};
     BX.MyBpButton.AdminList = {
+        /** ID таблицы админ-списка */
+        TABLE_ID: 'my_bpbutton_bpbutton_list',
+
         /**
          * Инициализация функционала админ-списка
          */
         init: function() {
+            this.initAdminListUrlFix();
             this.initActiveToggles();
             this.initTooltips();
             this.initSidePanelLinks();
+        },
+
+        /**
+         * Исправление URL для сортировки/фильтра: при REQUEST_URI=index.php клик ведёт на главную админки.
+         * Два способа: 1) перехват GetAdminList, 2) замена URL в onclick атрибутах DOM.
+         */
+        initAdminListUrlFix: function() {
+            var tableId = this.TABLE_ID;
+            var correctPath = '/bitrix/admin/my_bpbutton_bpbutton_list.php';
+
+            // 1. Перехват GetAdminList
+            function wrapGetAdminList() {
+                var adminList = window[tableId];
+                if (adminList && typeof adminList.GetAdminList === 'function') {
+                    var orig = adminList.GetAdminList.bind(adminList);
+                    adminList.GetAdminList = function(url, callback) {
+                        if (typeof url === 'string') {
+                            if (url.indexOf('index.php') !== -1) {
+                                url = url.replace(/\/bitrix\/admin\/index\.php/g, correctPath)
+                                    .replace(/^index\.php/, 'my_bpbutton_bpbutton_list.php');
+                            } else if (url.charAt(0) === '?' && url.indexOf('my_bpbutton_bpbutton_list') === -1) {
+                                url = correctPath + url;
+                            }
+                        }
+                        return orig(url, callback);
+                    };
+                    return true;
+                }
+                return false;
+            }
+
+            // 2. Прямая замена в onclick атрибутах (на случай если URL приходит из другого источника)
+            function fixOnclickInDom() {
+                var table = document.getElementById(tableId);
+                if (!table) return;
+                var cells = table.querySelectorAll('thead td[onclick], th[onclick]');
+                cells.forEach(function(cell) {
+                    var onclick = cell.getAttribute('onclick');
+                    if (onclick && onclick.indexOf('Sort') !== -1 && onclick.indexOf('index.php') !== -1) {
+                        cell.setAttribute('onclick', onclick.replace(/\/bitrix\/admin\/index\.php/g, correctPath));
+                    }
+                });
+                // Фильтр: кнопки "Найти", "Отменить"
+                var filterForm = document.getElementById('find_form');
+                if (filterForm && filterForm.action && filterForm.action.indexOf('index.php') !== -1) {
+                    filterForm.action = filterForm.action.replace(/\/bitrix\/admin\/index\.php/g, correctPath);
+                }
+            }
+
+            function runFix() {
+                var ok = wrapGetAdminList();
+                fixOnclickInDom();
+                return ok;
+            }
+
+            if (!runFix()) {
+                var attempts = [100, 300, 600];
+                attempts.forEach(function(delay) {
+                    setTimeout(runFix, delay);
+                });
+            }
+            BX.addCustomEvent && BX.addCustomEvent('onAdminListLoaded', function() {
+                fixOnclickInDom();
+            });
         },
 
         /**
