@@ -13,4 +13,4 @@ $MESS['MY_BPBTN_PARAM_INPUT_PLACEHOLDER'] = 'Введите значение';
 $MESS['MY_BPBTN_PARAM_VALUE_REQUIRED'] = 'Введите значение параметра.';
 $MESS['MY_BPBTN_EXECUTE'] = 'Выполнить';
 $MESS['MY_BPBTN_CANCEL'] = 'Отмена';
-
+$MESS['MY_BPBTN_SELECT_OPTION'] = 'Выберите вариант';

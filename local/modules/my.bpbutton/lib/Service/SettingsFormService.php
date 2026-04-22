@@ -38,7 +38,7 @@ class SettingsFormService
         $errors = [];
 
         $actionType = trim((string)($data['ACTION_TYPE'] ?? ''));
-        if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params'], true)) {
+        if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
             $actionType = 'url';
         }
 
@@ -52,13 +52,23 @@ class SettingsFormService
         }
 
         $bpTemplateId = isset($data['BP_TEMPLATE_ID']) ? (int)$data['BP_TEMPLATE_ID'] : null;
-        if (($actionType === 'bp_launch' || $actionType === 'bp_launch_with_params') && ($bpTemplateId === null || $bpTemplateId <= 0)) {
+        if (($actionType === 'bp_launch' || $actionType === 'bp_launch_with_params' || $actionType === 'bp_launch_with_button_params') && ($bpTemplateId === null || $bpTemplateId <= 0)) {
             $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_BP_TEMPLATE_REQUIRED') ?: 'Выберите шаблон бизнес-процесса.';
         }
 
         $paramName = trim((string)($data['PARAM_NAME'] ?? ''));
         $paramTitle = trim((string)($data['PARAM_TITLE'] ?? ''));
-        if ($actionType === 'bp_launch_with_params') {
+        $rawButtons = $data['PARAM_BUTTONS'] ?? [];
+        if (!is_array($rawButtons)) {
+            $rawButtons = [];
+        }
+        $paramButtons = array_values(array_filter(array_map(static function ($v): string {
+            return trim((string)$v);
+        }, $rawButtons), static function (string $v): bool {
+            return $v !== '';
+        }));
+
+        if ($actionType === 'bp_launch_with_params' || $actionType === 'bp_launch_with_button_params') {
             if ($paramName === '') {
                 $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_PARAM_NAME_REQUIRED') ?: 'Укажите имя параметра.';
             } elseif (!preg_match('~^[A-Za-z][A-Za-z0-9_]*$~', $paramName)) {
@@ -68,9 +78,18 @@ class SettingsFormService
             if ($paramTitle === '') {
                 $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_PARAM_TITLE_REQUIRED') ?: 'Укажите название параметра.';
             }
+
+            if ($actionType === 'bp_launch_with_button_params') {
+                if (empty($paramButtons)) {
+                    $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_PARAM_BUTTONS_REQUIRED') ?: 'Добавьте хотя бы один вариант кнопки.';
+                } elseif (count(array_unique(array_map('mb_strtolower', $paramButtons))) !== count($paramButtons)) {
+                    $errors[] = Loc::getMessage('MY_BPBUTTON_EDIT_ERROR_PARAM_BUTTONS_DUPLICATE') ?: 'Варианты кнопок не должны повторяться.';
+                }
+            }
         } else {
             $paramName = '';
             $paramTitle = '';
+            $paramButtons = [];
         }
 
         $width = trim((string)($data['WIDTH'] ?? ''));
@@ -93,7 +112,7 @@ class SettingsFormService
             'errors' => $errors,
             'normalized' => [
                 'ACTION_TYPE' => $actionType,
-                'BP_TEMPLATE_ID' => ($actionType === 'bp_launch' && $bpTemplateId > 0) ? $bpTemplateId : null,
+                'BP_TEMPLATE_ID' => (in_array($actionType, ['bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true) && $bpTemplateId > 0) ? $bpTemplateId : null,
                 'HANDLER_URL' => ($actionType === 'url' && $handlerUrl !== '') ? $handlerUrl : null,
                 'TITLE' => $title !== '' ? $title : null,
                 'WIDTH' => $width !== '' ? $width : null,
@@ -102,7 +121,8 @@ class SettingsFormService
                 'ACTIVE' => $active,
                 'PARAM_NAME' => $paramName !== '' ? $paramName : null,
                 'PARAM_TITLE' => $paramTitle !== '' ? $paramTitle : null,
-                'HIDE_BP_TAB' => in_array($actionType, ['bp_launch', 'bp_launch_with_params'], true) ? $hideBpTab : 'N',
+                'PARAM_BUTTONS' => !empty($paramButtons) ? json_encode($paramButtons, JSON_UNESCAPED_UNICODE) : null,
+                'HIDE_BP_TAB' => in_array($actionType, ['bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true) ? $hideBpTab : 'N',
             ],
         ];
     }
@@ -121,6 +141,7 @@ class SettingsFormService
             'BP_TEMPLATE_ID' => $data['BP_TEMPLATE_ID'] ?? null,
             'PARAM_NAME' => $data['PARAM_NAME'] ?? null,
             'PARAM_TITLE' => $data['PARAM_TITLE'] ?? null,
+            'PARAM_BUTTONS' => $data['PARAM_BUTTONS'] ?? null,
             'HANDLER_URL' => $data['HANDLER_URL'],
             'TITLE' => $data['TITLE'],
             'WIDTH' => $data['WIDTH'],

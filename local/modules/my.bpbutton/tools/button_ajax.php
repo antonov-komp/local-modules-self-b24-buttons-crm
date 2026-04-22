@@ -31,11 +31,14 @@ $elementId = (int)$request->getPost('elementId');
 $fieldId = (int)$request->getPost('fieldId');
 $action = (string)$request->getPost('action');
 $value = (string)$request->getPost('value');
+$selectedValue = (string)$request->getPost('selectedValue');
 
 try {
     $controller = new ButtonController();
     if ($action === 'startBpWithParams') {
         $result = $controller->startBpWithParamsAction($entityId, $elementId, $fieldId, $value);
+    } elseif ($action === 'startBpWithButtonParam') {
+        $result = $controller->startBpWithButtonParamAction($entityId, $elementId, $fieldId, $selectedValue);
     } else {
         $result = $controller->getConfigAction($entityId, $elementId, $fieldId);
     }
@@ -50,4 +53,3 @@ try {
 }
 
 echo json_encode($result);
-

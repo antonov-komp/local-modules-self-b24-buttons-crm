@@ -22,6 +22,7 @@ $MESS['BPBUTTON_ACTION_TYPE_LABEL'] = 'Тип действия';
 $MESS['BPBUTTON_ACTION_TYPE_URL'] = 'URL обработчика';
 $MESS['BPBUTTON_ACTION_TYPE_BP_LAUNCH'] = 'Запуск бизнес-процесса';
 $MESS['BPBUTTON_ACTION_TYPE_BP_LAUNCH_WITH_PARAMS'] = 'Запуск БП с параметром';
+$MESS['BPBUTTON_ACTION_TYPE_BP_LAUNCH_WITH_BUTTON_PARAMS'] = 'Запуск БП с кнопками';
 $MESS['BPBUTTON_BP_TEMPLATE_SELECT'] = 'Выберите шаблон БП';
 $MESS['BPBUTTON_BP_TEMPLATE_EMPTY'] = 'Нет шаблонов БП для данной сущности';
 $MESS['BPBUTTON_BP_TEMPLATE_SELECT_HINT'] = 'Шаблоны отображаются для типа сущности, к которому привязано поле.';
@@ -31,4 +32,3 @@ $MESS['BPBUTTON_PARAM_NAME'] = 'Имя параметра (EN)';
 $MESS['BPBUTTON_PARAM_NAME_HINT'] = 'Латиница, цифры и _. Первый символ — буква.';
 $MESS['BPBUTTON_PARAM_TITLE'] = 'Название параметра';
 $MESS['BPBUTTON_PARAM_TITLE_HINT'] = 'Показывается пользователю в окне ввода значения.';
-

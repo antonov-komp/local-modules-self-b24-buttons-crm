@@ -102,6 +102,12 @@ class EventHandler
                     'ALTER TABLE `' . $tableName . '` ADD COLUMN `PARAM_TITLE` VARCHAR(255) NULL AFTER `PARAM_NAME`'
                 );
             }
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'PARAM_BUTTONS'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `PARAM_BUTTONS` TEXT NULL AFTER `PARAM_TITLE`'
+                );
+            }
         } catch (\Throwable $e) {
             // Игнорируем ошибки миграции
         }
@@ -121,7 +127,7 @@ class EventHandler
             $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'HIDE_BP_TAB'");
             if (!$result->fetch()) {
                 $connection->queryExecute(
-                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\' AFTER `PARAM_TITLE`'
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\' AFTER `PARAM_BUTTONS`'
                 );
             }
         } catch (\Throwable $e) {
@@ -251,7 +257,7 @@ class EventHandler
 
             $settings = $field['SETTINGS'] ?? [];
             $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
-            if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params'], true)) {
+            if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
                 $actionType = 'url';
             }
             $bpTemplateId = isset($settings['BP_TEMPLATE_ID']) ? (int)$settings['BP_TEMPLATE_ID'] : null;
@@ -260,9 +266,19 @@ class EventHandler
             }
             $paramName = trim((string)($settings['PARAM_NAME'] ?? ''));
             $paramTitle = trim((string)($settings['PARAM_TITLE'] ?? ''));
-            if ($actionType !== 'bp_launch_with_params') {
+            $paramButtons = $settings['PARAM_BUTTONS'] ?? [];
+            if (!is_array($paramButtons)) {
+                $paramButtons = [];
+            }
+            $paramButtons = array_values(array_filter(array_map(
+                static fn($v) => trim((string)$v),
+                $paramButtons
+            ), static fn($v) => $v !== ''));
+
+            if (!in_array($actionType, ['bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
                 $paramName = '';
                 $paramTitle = '';
+                $paramButtons = [];
             }
 
             // Создаём дефолтную запись настроек для поля.
@@ -278,6 +294,7 @@ class EventHandler
                 'BP_TEMPLATE_ID'=> $bpTemplateId,
                 'PARAM_NAME'    => ($paramName !== '' ? $paramName : null),
                 'PARAM_TITLE'   => ($paramTitle !== '' ? $paramTitle : null),
+                'PARAM_BUTTONS' => !empty($paramButtons) ? json_encode($paramButtons, JSON_UNESCAPED_UNICODE) : null,
                 'ACTIVE'        => 'Y',
                 'CREATED_AT'    => new \Bitrix\Main\Type\DateTime(),
                 'UPDATED_AT'    => new \Bitrix\Main\Type\DateTime(),
@@ -323,7 +340,7 @@ class EventHandler
             $settings = $field['SETTINGS'] ?? [];
 
             $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
-            if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params'], true)) {
+            if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
                 $actionType = 'url';
             }
 
@@ -333,9 +350,19 @@ class EventHandler
             }
             $paramName = trim((string)($settings['PARAM_NAME'] ?? ''));
             $paramTitle = trim((string)($settings['PARAM_TITLE'] ?? ''));
-            if ($actionType !== 'bp_launch_with_params') {
+            $paramButtons = $settings['PARAM_BUTTONS'] ?? [];
+            if (!is_array($paramButtons)) {
+                $paramButtons = [];
+            }
+            $paramButtons = array_values(array_filter(array_map(
+                static fn($v) => trim((string)$v),
+                $paramButtons
+            ), static fn($v) => $v !== ''));
+
+            if (!in_array($actionType, ['bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
                 $paramName = '';
                 $paramTitle = '';
+                $paramButtons = [];
             }
 
             $settingsRow = SettingsTable::getList([
@@ -350,6 +377,7 @@ class EventHandler
                     'BP_TEMPLATE_ID' => $bpTemplateId,
                     'PARAM_NAME' => ($paramName !== '' ? $paramName : null),
                     'PARAM_TITLE' => ($paramTitle !== '' ? $paramTitle : null),
+                    'PARAM_BUTTONS' => !empty($paramButtons) ? json_encode($paramButtons, JSON_UNESCAPED_UNICODE) : null,
                     'UPDATED_AT' => new \Bitrix\Main\Type\DateTime(),
                 ]);
             }
@@ -407,4 +435,3 @@ class EventHandler
         }
     }
 }
-

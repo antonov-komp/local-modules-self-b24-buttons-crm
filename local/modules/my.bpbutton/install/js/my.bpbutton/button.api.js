@@ -93,9 +93,43 @@
 		});
 	}
 
+	function startBpWithButtonParam(params, onSuccess, onFailure)
+	{
+		if (!onSuccess || typeof onSuccess !== 'function')
+		{
+			onSuccess = function () {};
+		}
+		if (!onFailure || typeof onFailure !== 'function')
+		{
+			onFailure = function () {};
+		}
+
+		BX.ajax({
+			url: getConfigUrl(),
+			method: 'POST',
+			dataType: 'json',
+			cache: false,
+			data: {
+				action: 'startBpWithButtonParam',
+				entityId: params.entityId || '',
+				elementId: params.elementId || 0,
+				fieldId: params.fieldId || 0,
+				selectedValue: params.selectedValue || '',
+				sessid: (BX.bitrix_sessid ? BX.bitrix_sessid() : '')
+			},
+			onsuccess: function (response) {
+				onSuccess(response);
+			},
+			onfailure: function () {
+				onFailure();
+			}
+		});
+	}
+
 	BX.MyBpButton.ButtonApi = {
 		getConfigUrl: getConfigUrl,
 		fetchConfig: fetchConfig,
-		startBpWithParams: startBpWithParams
+		startBpWithParams: startBpWithParams,
+		startBpWithButtonParam: startBpWithButtonParam
 	};
 })();

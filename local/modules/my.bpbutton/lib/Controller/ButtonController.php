@@ -147,6 +147,39 @@ final class ButtonController extends Controller
         }
     }
 
+    public function startBpWithButtonParamAction(string $entityId, int $elementId, int $fieldId, string $selectedValue): array
+    {
+        $userId = $this->getCurrentUserId();
+
+        if (!$this->validateSession()) {
+            return $this->errorResponse('INVALID_SESSION', Loc::getMessage('MY_BPBUTTON_CTRL_INVALID_SESSION'));
+        }
+        if (!$this->loadRequiredModules()) {
+            return $this->errorResponse('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
+        }
+        if (!$this->checkCrmAccess($entityId, $elementId)) {
+            return $this->errorResponse('ACCESS_DENIED', Loc::getMessage('MY_BPBUTTON_CTRL_ACCESS_DENIED'));
+        }
+
+        try {
+            $result = $this->getService()->startBpWithButtonParam($entityId, $elementId, $fieldId, $userId, $selectedValue);
+            $this->getService()->logClick(
+                [
+                    'fieldId' => $fieldId,
+                    'entityId' => $entityId,
+                    'elementId' => $elementId,
+                    'userId' => $userId,
+                ],
+                (($result['success'] ?? false) === true) ? 'SUCCESS' : (string)($result['error']['code'] ?? 'ERROR'),
+                (($result['success'] ?? false) === true) ? null : (string)($result['error']['message'] ?? '')
+            );
+            return $result;
+        } catch (\Throwable $e) {
+            SecurityHelper::safeLog($e, 'my.bpbutton', 'ButtonController::startBpWithButtonParamAction');
+            return $this->errorResponse('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_CTRL_INTERNAL_ERROR'));
+        }
+    }
+
     private function getCurrentUserId(): int
     {
         if (isset($GLOBALS['USER']) && $GLOBALS['USER'] instanceof \CUser) {

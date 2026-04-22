@@ -196,7 +196,7 @@ class BpButtonUserType
             }
 
             $actionType = (string)($settingsRow['ACTION_TYPE'] ?? $field['SETTINGS']['ACTION_TYPE'] ?? 'url');
-            if (!in_array($actionType, ['bp_launch', 'bp_launch_with_params'], true)) {
+            if (!in_array($actionType, ['bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
                 $actionType = 'url';
             }
             $bpTemplateId = (int)($settingsRow['BP_TEMPLATE_ID'] ?? $field['SETTINGS']['BP_TEMPLATE_ID'] ?? 0);
@@ -230,6 +230,9 @@ class BpButtonUserType
                     $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx($bpLabel) . '</div>';
                 } elseif ($actionType === 'bp_launch_with_params') {
                     $bpLabel = Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH_WITH_PARAMS') ?: 'Запуск БП с параметром';
+                    $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx($bpLabel) . '</div>';
+                } elseif ($actionType === 'bp_launch_with_button_params') {
+                    $bpLabel = Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH_WITH_BUTTON_PARAMS') ?: 'Запуск БП с кнопками';
                     $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx($bpLabel) . '</div>';
                 } else {
                     $summaryHtml .= '<div style="color: #535c69;">' . htmlspecialcharsbx(sprintf($urlLabel, $url ?: '—')) . '</div>';
@@ -275,6 +278,7 @@ class BpButtonUserType
         $actionTypeUrl = Loc::getMessage('BPBUTTON_ACTION_TYPE_URL') ?: 'URL обработчика';
         $actionTypeBpLaunch = Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH') ?: 'Запуск бизнес-процесса';
         $actionTypeBpLaunchWithParams = Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH_WITH_PARAMS') ?: 'Запуск БП с параметром';
+        $actionTypeBpLaunchWithButtonParams = Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH_WITH_BUTTON_PARAMS') ?: 'Запуск БП с кнопками';
         $selectLabel = Loc::getMessage('BPBUTTON_BP_TEMPLATE_SELECT') ?: 'Выберите шаблон БП';
         $emptyLabel = Loc::getMessage('BPBUTTON_BP_TEMPLATE_EMPTY') ?: 'Нет шаблонов БП для данной сущности';
         $hintLabel = Loc::getMessage('BPBUTTON_BP_TEMPLATE_SELECT_HINT') ?: 'Шаблоны отображаются для типа сущности, к которому привязано поле.';
@@ -282,6 +286,7 @@ class BpButtonUserType
         $nameUrl = $baseName . '[ACTION_TYPE]';
         $nameBp = $baseName . '[ACTION_TYPE]';
         $nameBpWithParams = $baseName . '[ACTION_TYPE]';
+        $nameBpWithButtonParams = $baseName . '[ACTION_TYPE]';
         $nameTemplate = $baseName . '[BP_TEMPLATE_ID]';
         $nameParamName = $baseName . '[PARAM_NAME]';
         $nameParamTitle = $baseName . '[PARAM_TITLE]';
@@ -291,12 +296,13 @@ class BpButtonUserType
         if ($showBpLaunch) {
             $html .= ' &nbsp; <label><input type="radio" name="' . htmlspecialcharsbx($nameBp) . '" value="bp_launch"' . ($actionType === 'bp_launch' ? ' checked' : '') . '> ' . htmlspecialcharsbx($actionTypeBpLaunch) . '</label>';
             $html .= ' &nbsp; <label><input type="radio" name="' . htmlspecialcharsbx($nameBpWithParams) . '" value="bp_launch_with_params"' . ($actionType === 'bp_launch_with_params' ? ' checked' : '') . '> ' . htmlspecialcharsbx($actionTypeBpLaunchWithParams) . '</label>';
+            $html .= ' &nbsp; <label><input type="radio" name="' . htmlspecialcharsbx($nameBpWithButtonParams) . '" value="bp_launch_with_button_params"' . ($actionType === 'bp_launch_with_button_params' ? ' checked' : '') . '> ' . htmlspecialcharsbx($actionTypeBpLaunchWithButtonParams) . '</label>';
         } else {
             $html .= ' <span style="color: #828b95; font-size: 11px;">(' . (Loc::getMessage('BPBUTTON_BP_MODULE_REQUIRED') ?: 'Требуется модуль bizproc') . ')</span>';
         }
         $html .= '</td></tr>';
 
-        if ($showBpLaunch && in_array($actionType, ['bp_launch', 'bp_launch_with_params'], true)) {
+        if ($showBpLaunch && in_array($actionType, ['bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
             $resolver = new BpTemplateResolver();
             $templates = $entityId !== '' ? $resolver->getTemplatesByEntityId($entityId) : [];
 
@@ -314,7 +320,7 @@ class BpButtonUserType
             $html .= '</td></tr>';
         }
 
-        if ($showBpLaunch && $actionType === 'bp_launch_with_params') {
+        if ($showBpLaunch && in_array($actionType, ['bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
             $html .= '<tr><td>' . htmlspecialcharsbx(Loc::getMessage('BPBUTTON_PARAM_NAME') ?: 'Имя параметра (EN)') . ':</td><td>';
             $html .= '<input type="text" name="' . htmlspecialcharsbx($nameParamName) . '" value="' . htmlspecialcharsbx($paramName) . '" size="35" />';
             $html .= '<div style="margin-top: 4px; color: #666; font-size: 11px;">' . htmlspecialcharsbx(Loc::getMessage('BPBUTTON_PARAM_NAME_HINT') ?: 'Латиница, цифры и _. Первый символ — буква.') . '</div>';
@@ -347,7 +353,7 @@ class BpButtonUserType
         }
 
         $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
-        if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params'], true)) {
+        if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
             $actionType = 'url';
         }
         $settings['ACTION_TYPE'] = $actionType;
@@ -357,7 +363,7 @@ class BpButtonUserType
 
         $paramName = trim((string)($settings['PARAM_NAME'] ?? ''));
         $paramTitle = trim((string)($settings['PARAM_TITLE'] ?? ''));
-        if ($actionType !== 'bp_launch_with_params') {
+        if (!in_array($actionType, ['bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
             $paramName = '';
             $paramTitle = '';
         }
@@ -431,4 +437,3 @@ class BpButtonUserType
         return static::renderField($userField, $additionalParameters);
     }
 }
-
