@@ -14,7 +14,7 @@
 	 */
 	function getConfigUrl()
 	{
-		return '/bitrix/services/my.bpbutton/button/ajax.php';
+		return '/local/modules/my.bpbutton/tools/button_ajax.php';
 	}
 
 	/**
