@@ -99,6 +99,8 @@ class SettingsTable extends Entity\DataManager
                 },
             ]),
 
+            new Entity\TextField('PARAM_BUTTONS'),
+
             new Entity\BooleanField('HIDE_BP_TAB', [
                 'values'  => ['N', 'Y'],
                 'default' => 'N',
@@ -119,4 +121,3 @@ class SettingsTable extends Entity\DataManager
         ];
     }
 }
-

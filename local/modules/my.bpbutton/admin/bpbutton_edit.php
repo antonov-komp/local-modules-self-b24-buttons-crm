@@ -63,6 +63,7 @@ if ($isPost && $isAjax && (isset($_POST['save']) || isset($_POST['apply'])) && $
             'BP_TEMPLATE_ID' => $request->getPost('BP_TEMPLATE_ID'),
             'PARAM_NAME' => $request->getPost('PARAM_NAME'),
             'PARAM_TITLE' => $request->getPost('PARAM_TITLE'),
+            'PARAM_BUTTONS' => $request->getPost('PARAM_BUTTONS'),
             'HANDLER_URL' => $request->getPost('HANDLER_URL'),
             'TITLE' => $request->getPost('TITLE'),
             'WIDTH' => $request->getPost('WIDTH'),
@@ -138,6 +139,7 @@ if ($isPost && (isset($_POST['save']) || isset($_POST['apply']))) {
         'BP_TEMPLATE_ID' => $request->getPost('BP_TEMPLATE_ID'),
         'PARAM_NAME' => $request->getPost('PARAM_NAME'),
         'PARAM_TITLE' => $request->getPost('PARAM_TITLE'),
+        'PARAM_BUTTONS' => $request->getPost('PARAM_BUTTONS'),
         'HANDLER_URL' => $request->getPost('HANDLER_URL'),
         'TITLE' => $request->getPost('TITLE'),
         'WIDTH' => $request->getPost('WIDTH'),
@@ -254,12 +256,20 @@ $tabControl = new CAdminTabControl('tabControl', [
     <?php endif; ?>
     <?php
     $actionType = trim((string)($settingsRow['ACTION_TYPE'] ?? ''));
-    if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params'], true)) {
+    if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
         $actionType = 'url';
     }
     $bpTemplateId = (int)($settingsRow['BP_TEMPLATE_ID'] ?? 0);
     $paramName = trim((string)($settingsRow['PARAM_NAME'] ?? ''));
     $paramTitle = trim((string)($settingsRow['PARAM_TITLE'] ?? ''));
+    $paramButtons = [];
+    $rawButtons = $settingsRow['PARAM_BUTTONS'] ?? null;
+    if (is_string($rawButtons) && $rawButtons !== '') {
+        $decodedButtons = json_decode($rawButtons, true);
+        if (is_array($decodedButtons)) {
+            $paramButtons = array_values(array_filter(array_map(static fn($v) => trim((string)$v), $decodedButtons), static fn($v) => $v !== ''));
+        }
+    }
     $entityId = trim((string)($settingsRow['ENTITY_ID'] ?? ''));
     $resolver = new BpTemplateResolver();
     $bpTemplates = $entityId !== '' ? $resolver->getTemplatesByEntityId($entityId) : [];
@@ -272,9 +282,11 @@ $tabControl = new CAdminTabControl('tabControl', [
             <label><input type="radio" name="ACTION_TYPE" value="bp_launch"<?= $actionType === 'bp_launch' ? ' checked' : ''; ?>> <?= htmlspecialcharsbx(Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH') ?: 'Запуск бизнес-процесса'); ?></label>
             &nbsp;&nbsp;
             <label><input type="radio" name="ACTION_TYPE" value="bp_launch_with_params"<?= $actionType === 'bp_launch_with_params' ? ' checked' : ''; ?>> <?= htmlspecialcharsbx(Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH_WITH_PARAMS') ?: 'Запуск БП с параметром'); ?></label>
+            &nbsp;&nbsp;
+            <label><input type="radio" name="ACTION_TYPE" value="bp_launch_with_button_params"<?= $actionType === 'bp_launch_with_button_params' ? ' checked' : ''; ?>> <?= htmlspecialcharsbx(Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH_WITH_BUTTON_PARAMS') ?: 'Запуск БП с кнопками'); ?></label>
         </td>
     </tr>
-    <tr id="bp-template-row" style="<?= !in_array($actionType, ['bp_launch', 'bp_launch_with_params'], true) ? 'display:none;' : ''; ?>">
+    <tr id="bp-template-row" style="<?= !in_array($actionType, ['bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true) ? 'display:none;' : ''; ?>">
         <td><?= Loc::getMessage('BPBUTTON_BP_TEMPLATE_SELECT') ?: 'Шаблон БП'; ?>:</td>
         <td>
             <select name="BP_TEMPLATE_ID" style="min-width: 300px;">
@@ -288,7 +300,7 @@ $tabControl = new CAdminTabControl('tabControl', [
             <?php endif; ?>
         </td>
     </tr>
-    <tr id="bp-param-name-row" style="<?= $actionType !== 'bp_launch_with_params' ? 'display:none;' : ''; ?>">
+    <tr id="bp-param-name-row" style="<?= !in_array($actionType, ['bp_launch_with_params', 'bp_launch_with_button_params'], true) ? 'display:none;' : ''; ?>">
         <td><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_PARAM_NAME') ?: 'Имя параметра (EN)'); ?>:</td>
         <td>
             <input type="text" name="PARAM_NAME" size="40"
@@ -297,7 +309,7 @@ $tabControl = new CAdminTabControl('tabControl', [
             <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_PARAM_NAME_HINT') ?: 'Латиница, цифры, _. Первый символ — буква.'); ?></div>
         </td>
     </tr>
-    <tr id="bp-param-title-row" style="<?= $actionType !== 'bp_launch_with_params' ? 'display:none;' : ''; ?>">
+    <tr id="bp-param-title-row" style="<?= !in_array($actionType, ['bp_launch_with_params', 'bp_launch_with_button_params'], true) ? 'display:none;' : ''; ?>">
         <td><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_PARAM_TITLE') ?: 'Название параметра'); ?>:</td>
         <td>
             <input type="text" name="PARAM_TITLE" size="40"
@@ -307,7 +319,22 @@ $tabControl = new CAdminTabControl('tabControl', [
         </td>
     </tr>
     <?php $hideBpTab = ($settingsRow['HIDE_BP_TAB'] ?? 'N') === 'Y'; ?>
-    <tr id="hide-bp-tab-row" style="<?= !in_array($actionType, ['bp_launch', 'bp_launch_with_params'], true) ? 'display:none;' : ''; ?>">
+    <tr id="bp-param-buttons-row" style="<?= $actionType !== 'bp_launch_with_button_params' ? 'display:none;' : ''; ?>">
+        <td><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_PARAM_BUTTONS') ?: 'Варианты кнопок'); ?>:</td>
+        <td>
+            <div id="bp-param-buttons-list">
+                <?php foreach ($paramButtons as $btnTitle): ?>
+                    <div style="margin-bottom:6px;">
+                        <input type="text" name="PARAM_BUTTONS[]" size="40" value="<?= htmlspecialcharsbx($btnTitle); ?>">
+                        <button type="button" class="adm-btn" data-role="remove-param-button">×</button>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <button type="button" class="adm-btn" id="add-param-button"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_ADD_PARAM_BUTTON') ?: 'Добавить'); ?></button>
+            <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_PARAM_BUTTONS_HINT') ?: 'Каждый вариант будет отображаться отдельной кнопкой в popup.'); ?></div>
+        </td>
+    </tr>
+    <tr id="hide-bp-tab-row" style="<?= !in_array($actionType, ['bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true) ? 'display:none;' : ''; ?>">
         <td><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HIDE_BP_TAB') ?: 'Скрыть вкладку Бизнес-процессы'); ?>:</td>
         <td>
             <input type="checkbox" name="HIDE_BP_TAB" value="Y"<?= $hideBpTab ? ' checked' : ''; ?>
@@ -321,7 +348,7 @@ $tabControl = new CAdminTabControl('tabControl', [
             <input type="text" name="HANDLER_URL" size="60"
                    value="<?= htmlspecialcharsbx((string)$settingsRow['HANDLER_URL']); ?>"
                    title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?>"
-                   <?= in_array($actionType, ['bp_launch', 'bp_launch_with_params'], true) ? ' placeholder="' . htmlspecialcharsbx(Loc::getMessage('BPBUTTON_HANDLER_URL_OPTIONAL') ?: 'Не требуется для запуска БП') . '"' : ''; ?>>
+                   <?= in_array($actionType, ['bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true) ? ' placeholder="' . htmlspecialcharsbx(Loc::getMessage('BPBUTTON_HANDLER_URL_OPTIONAL') ?: 'Не требуется для запуска БП') . '"' : ''; ?>>
             <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?></div>
         </td>
     </tr>
@@ -386,19 +413,39 @@ $tabControl = new CAdminTabControl('tabControl', [
     var hideBpTabRow = document.getElementById('hide-bp-tab-row');
     var bpParamNameRow = document.getElementById('bp-param-name-row');
     var bpParamTitleRow = document.getElementById('bp-param-title-row');
+    var bpParamButtonsRow = document.getElementById('bp-param-buttons-row');
+    var list = document.getElementById('bp-param-buttons-list');
+    var addBtn = document.getElementById('add-param-button');
     if (radios.length && bpRow) {
         function toggle() {
             var v = document.querySelector('input[name="ACTION_TYPE"]:checked');
             var action = v ? v.value : 'url';
-            var showBp = (action === 'bp_launch' || action === 'bp_launch_with_params');
-            var showParam = (action === 'bp_launch_with_params');
+            var showBp = (action === 'bp_launch' || action === 'bp_launch_with_params' || action === 'bp_launch_with_button_params');
+            var showParam = (action === 'bp_launch_with_params' || action === 'bp_launch_with_button_params');
+            var showButtons = (action === 'bp_launch_with_button_params');
             bpRow.style.display = showBp ? '' : 'none';
             if (hideBpTabRow) hideBpTabRow.style.display = showBp ? '' : 'none';
             if (bpParamNameRow) bpParamNameRow.style.display = showParam ? '' : 'none';
             if (bpParamTitleRow) bpParamTitleRow.style.display = showParam ? '' : 'none';
+            if (bpParamButtonsRow) bpParamButtonsRow.style.display = showButtons ? '' : 'none';
         }
         radios.forEach(function(r) { r.addEventListener('change', toggle); });
         toggle();
+    }
+    function bindRemove(root) {
+        var btn = root.querySelector('[data-role=\"remove-param-button\"]');
+        if (!btn) return;
+        btn.addEventListener('click', function() { root.remove(); });
+    }
+    if (addBtn && list) {
+        addBtn.addEventListener('click', function() {
+            var row = document.createElement('div');
+            row.style.marginBottom = '6px';
+            row.innerHTML = '<input type=\"text\" name=\"PARAM_BUTTONS[]\" size=\"40\" value=\"\"> <button type=\"button\" class=\"adm-btn\" data-role=\"remove-param-button\">×</button>';
+            list.appendChild(row);
+            bindRemove(row);
+        });
+        list.querySelectorAll('div').forEach(bindRemove);
     }
 })();
 </script>

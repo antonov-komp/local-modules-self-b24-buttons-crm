@@ -132,6 +132,7 @@ class my_bpbutton extends CModule
                     `BP_TEMPLATE_ID` INT UNSIGNED NULL,
                     `PARAM_NAME` VARCHAR(100) NULL,
                     `PARAM_TITLE` VARCHAR(255) NULL,
+                    `PARAM_BUTTONS` TEXT NULL,
                     `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\',
                     `ACTIVE` CHAR(1) NOT NULL DEFAULT \'Y\',
                     `CREATED_AT` DATETIME NOT NULL,
@@ -190,11 +191,18 @@ class my_bpbutton extends CModule
                     'ALTER TABLE `' . $tableName . '` ADD COLUMN `PARAM_TITLE` VARCHAR(255) NULL AFTER `PARAM_NAME`'
                 );
             }
+            // Миграция TASK-016: PARAM_BUTTONS (JSON со списком кнопок)
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'PARAM_BUTTONS'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `PARAM_BUTTONS` TEXT NULL AFTER `PARAM_TITLE`'
+                );
+            }
             // Миграция TASK-014-A: HIDE_BP_TAB
             $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'HIDE_BP_TAB'");
             if (!$result->fetch()) {
                 $connection->queryExecute(
-                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\' AFTER `PARAM_TITLE`'
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\' AFTER `PARAM_BUTTONS`'
                 );
             }
         }
@@ -443,4 +451,3 @@ class my_bpbutton extends CModule
         // Дополнительных действий не требуется
     }
 }
-

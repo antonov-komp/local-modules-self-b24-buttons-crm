@@ -119,7 +119,7 @@ final class SettingsRepository
         }
 
         $filter = [
-            '@ACTION_TYPE' => ['bp_launch', 'bp_launch_with_params'],
+            '@ACTION_TYPE' => ['bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'],
             '=HIDE_BP_TAB' => 'Y',
             '=ACTIVE' => 'Y',
         ];

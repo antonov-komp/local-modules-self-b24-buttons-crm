@@ -9,8 +9,8 @@ $MESS['MY_BPBUTTON_SERVICE_BP_STARTER_FAILED'] = 'Не удалось подго
 $MESS['MY_BPBUTTON_SERVICE_PARAM_NAME_INVALID'] = 'Некорректное имя параметра запуска БП.';
 $MESS['MY_BPBUTTON_SERVICE_PARAM_TITLE_DEFAULT'] = 'Параметр';
 $MESS['MY_BPBUTTON_SERVICE_PARAM_VALUE_REQUIRED'] = 'Введите значение параметра.';
+$MESS['MY_BPBUTTON_SERVICE_PARAM_BUTTON_VALUE_INVALID'] = 'Выбран недопустимый вариант кнопки.';
 $MESS['MY_BPBUTTON_SERVICE_ACTION_NOT_SUPPORTED'] = 'Текущий режим кнопки не поддерживает запуск с параметрами.';
 $MESS['MY_BPBUTTON_SERVICE_INVALID_DOCUMENT'] = 'Не удалось подготовить документ для запуска БП.';
 $MESS['MY_BPBUTTON_SERVICE_ACCESS_DENIED'] = 'Недостаточно прав для запуска БП.';
 $MESS['MY_BPBUTTON_SERVICE_BP_START_FAILED'] = 'Не удалось запустить бизнес-процесс.';
-

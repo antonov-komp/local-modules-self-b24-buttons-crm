@@ -45,7 +45,7 @@ final class ButtonService
         }
 
         $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
-        if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params'], true)) {
+        if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
             $actionType = 'url';
         }
 
@@ -54,6 +54,9 @@ final class ButtonService
         }
         if ($actionType === 'bp_launch_with_params') {
             return $this->getBpLaunchWithParamsConfig($entityId, $elementId, $fieldId, $userId, $settings);
+        }
+        if ($actionType === 'bp_launch_with_button_params') {
+            return $this->getBpLaunchWithButtonParamsConfig($entityId, $elementId, $fieldId, $userId, $settings);
         }
 
         $handlerUrl = trim((string)($settings['HANDLER_URL'] ?? ''));
@@ -88,6 +91,61 @@ final class ButtonService
                 'url' => $finalUrl,
                 'title' => $title,
                 'width' => $width,
+                'context' => $context,
+            ],
+        ];
+    }
+
+    private function getBpLaunchWithButtonParamsConfig(string $entityId, int $elementId, int $fieldId, int $userId, array $settings): array
+    {
+        $templateId = (int)($settings['BP_TEMPLATE_ID'] ?? 0);
+        if ($templateId <= 0) {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_BP_TEMPLATE_NOT_SET') ?: 'Шаблон БП не выбран. Настройте кнопку.');
+        }
+
+        $paramName = trim((string)($settings['PARAM_NAME'] ?? ''));
+        $paramTitle = trim((string)($settings['PARAM_TITLE'] ?? ''));
+        $rawOptions = (string)($settings['PARAM_BUTTONS'] ?? '');
+        $options = [];
+        if ($rawOptions !== '') {
+            $decoded = json_decode($rawOptions, true);
+            if (is_array($decoded)) {
+                $options = array_values(array_filter(array_map(
+                    static fn($v) => trim((string)$v),
+                    $decoded
+                ), static fn($v) => $v !== ''));
+            }
+        }
+        if ($paramName === '' || !preg_match('~^[A-Za-z][A-Za-z0-9_]*$~', $paramName)) {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_PARAM_NAME_INVALID') ?: 'Некорректное имя параметра запуска БП.');
+        }
+        if ($paramTitle === '') {
+            $paramTitle = Loc::getMessage('MY_BPBUTTON_SERVICE_PARAM_TITLE_DEFAULT') ?: 'Параметр';
+        }
+        if (empty($options)) {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_PARAM_BUTTON_VALUE_INVALID') ?: 'Выбран недопустимый вариант кнопки.');
+        }
+
+        $buttonOptions = array_map(static fn($option) => ['title' => $option, 'value' => $option], $options);
+        $context = [
+            'settingsId' => (int)($settings['ID'] ?? 0),
+            'entityId' => $entityId,
+            'elementId' => $elementId,
+            'fieldId' => $fieldId,
+            'userId' => $userId,
+        ];
+
+        return [
+            'success' => true,
+            'data' => [
+                'actionType' => 'bp_launch_with_button_params',
+                'bpTemplateId' => $templateId,
+                'paramMeta' => [
+                    'name' => $paramName,
+                    'title' => $paramTitle,
+                    'mode' => 'button_select',
+                ],
+                'buttonOptions' => $buttonOptions,
                 'context' => $context,
             ],
         ];
@@ -190,7 +248,7 @@ final class ButtonService
         if (($settings['ACTIVE'] ?? 'N') !== 'Y') {
             return $this->error('BUTTON_INACTIVE', Loc::getMessage('MY_BPBUTTON_SERVICE_BUTTON_INACTIVE') ?: 'Действие недоступно. Кнопка отключена администратором.');
         }
-        if (($settings['ACTION_TYPE'] ?? 'url') !== 'bp_launch_with_params') {
+        if (!in_array(($settings['ACTION_TYPE'] ?? 'url'), ['bp_launch_with_params', 'bp_launch_with_button_params'], true)) {
             return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_ACTION_NOT_SUPPORTED') ?: 'Текущий режим кнопки не поддерживает запуск с параметрами.');
         }
 
@@ -258,6 +316,42 @@ final class ButtonService
                 'workflowId' => (string)$workflowId,
             ],
         ];
+    }
+
+    public function startBpWithButtonParam(string $entityId, int $elementId, int $fieldId, int $userId, string $selectedValue): array
+    {
+        $settings = $this->repository->getByFieldId($fieldId);
+        if (!$settings) {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_SETTINGS_NOT_FOUND') ?: 'Кнопка не настроена.');
+        }
+        if (($settings['ACTIVE'] ?? 'N') !== 'Y') {
+            return $this->error('BUTTON_INACTIVE', Loc::getMessage('MY_BPBUTTON_SERVICE_BUTTON_INACTIVE') ?: 'Действие недоступно. Кнопка отключена администратором.');
+        }
+        if (($settings['ACTION_TYPE'] ?? 'url') !== 'bp_launch_with_button_params') {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_ACTION_NOT_SUPPORTED') ?: 'Текущий режим кнопки не поддерживает запуск с параметрами.');
+        }
+
+        $selectedValue = trim($selectedValue);
+        if ($selectedValue === '') {
+            return $this->error('VALIDATION_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_PARAM_BUTTON_VALUE_INVALID') ?: 'Выбран недопустимый вариант кнопки.');
+        }
+
+        $rawOptions = (string)($settings['PARAM_BUTTONS'] ?? '');
+        $options = [];
+        if ($rawOptions !== '') {
+            $decoded = json_decode($rawOptions, true);
+            if (is_array($decoded)) {
+                $options = array_values(array_filter(array_map(
+                    static fn($v) => trim((string)$v),
+                    $decoded
+                ), static fn($v) => $v !== ''));
+            }
+        }
+        if (empty($options) || !in_array($selectedValue, $options, true)) {
+            return $this->error('VALIDATION_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_PARAM_BUTTON_VALUE_INVALID') ?: 'Выбран недопустимый вариант кнопки.');
+        }
+
+        return $this->startBpWithParams($entityId, $elementId, $fieldId, $userId, $selectedValue);
     }
 
     /**
@@ -392,4 +486,3 @@ final class ButtonService
         return $message;
     }
 }
-

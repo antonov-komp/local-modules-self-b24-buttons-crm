@@ -144,6 +144,11 @@
 					this.handleBpLaunchWithParams(buttonEl, data, ctx);
 					return;
 				}
+				if (actionType === 'bp_launch_with_button_params' && data.bpTemplateId && data.paramMeta && Array.isArray(data.buttonOptions))
+				{
+					this.handleBpLaunchWithButtonParams(buttonEl, data, ctx);
+					return;
+				}
 
 				if (actionType === 'bp_launch' && data.bpTemplateId && data.starterConfig)
 				{
@@ -306,6 +311,97 @@
 			State.setIdle(buttonEl);
 			popup.show();
 			setTimeout(function () { valueInput.focus(); }, 30);
+		},
+
+		handleBpLaunchWithButtonParams: function (buttonEl, data, ctx)
+		{
+			var self = this;
+			var meta = data.paramMeta || {};
+			var title = (meta.title || '').trim() || State.message('MY_BPBTN_SELECT_OPTION', 'Выберите вариант');
+			var popupTitle = State.message('MY_BPBTN_PARAM_POPUP_TITLE', 'Запуск бизнес-процесса');
+			var buttonOptions = Array.isArray(data.buttonOptions) ? data.buttonOptions : [];
+
+			var children = [
+				BX.create('div', {
+					text: title,
+					style: { marginBottom: '10px', fontWeight: '600' }
+				})
+			];
+
+			buttonOptions.forEach(function(option) {
+				var optionTitle = String((option && option.title) || '').trim();
+				var optionValue = String((option && option.value) || optionTitle).trim();
+				if (!optionTitle || !optionValue) return;
+
+				children.push(BX.create('button', {
+					attrs: { type: 'button' },
+					props: { className: 'ui-btn ui-btn-light-border' },
+					text: optionTitle,
+					style: { marginRight: '8px', marginBottom: '8px' },
+					events: {
+						click: function() {
+							State.setLoading(buttonEl);
+							Api.startBpWithButtonParam(
+								{
+									entityId: ctx.entityId || '',
+									elementId: ctx.elementId || 0,
+									fieldId: ctx.fieldId || 0,
+									selectedValue: optionValue
+								},
+								function (response) {
+									State.setIdle(buttonEl);
+									if (response && response.success === true)
+									{
+										popup.close();
+										State.notify(State.message('MY_BPBTN_BP_SUCCESS', 'Бизнес-процесс запущен'));
+										self.logClick(buttonEl, ctx, 'SUCCESS', null);
+										return;
+									}
+									var msg = (response && response.error && response.error.message)
+										? String(response.error.message)
+										: State.message('MY_BPBTN_ERROR_INTERNAL_ERROR', 'Произошла ошибка. Попробуйте позже или обратитесь к администратору.');
+									var code = (response && response.error && response.error.code)
+										? String(response.error.code)
+										: 'INTERNAL_ERROR';
+									State.notify(msg);
+									self.logClick(buttonEl, ctx, code, msg);
+								},
+								function () {
+									State.setIdle(buttonEl);
+									State.notify(State.message('MY_BPBTN_ERROR_INTERNAL_ERROR', 'Произошла ошибка. Попробуйте позже или обратитесь к администратору.'));
+									self.logClick(buttonEl, ctx, 'INTERNAL_ERROR', 'AJAX failure');
+								}
+							);
+						}
+					}
+				}));
+			});
+
+			var content = BX.create('div', {
+				style: { padding: '8px 0' },
+				children: children
+			});
+
+			var popup = new BX.PopupWindow(null, buttonEl, {
+				content: content,
+				autoHide: false,
+				closeByEsc: true,
+				overlay: true,
+				draggable: false,
+				titleBar: popupTitle,
+				width: 460,
+				buttons: [
+					new BX.PopupWindowButtonLink({
+						text: State.message('MY_BPBTN_CANCEL', 'Отмена'),
+						className: 'ui-btn ui-btn-link',
+						events: { click: function () { popup.close(); } }
+					})
+				],
+				events: { onPopupClose: function () { popup.destroy(); } }
+			});
+
+			State.setIdle(buttonEl);
+			popup.show();
 		},
 
 		handleBpLaunch: function (buttonEl, data, ctx)
