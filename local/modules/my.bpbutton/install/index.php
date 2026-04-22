@@ -128,7 +128,7 @@ class my_bpbutton extends CModule
                     `BUTTON_TEXT` VARCHAR(255) NULL,
                     `WIDTH` VARCHAR(50) NULL,
                     `BUTTON_SIZE` VARCHAR(20) NULL,
-                    `ACTION_TYPE` VARCHAR(20) NULL DEFAULT \'url\',
+                    `ACTION_TYPE` VARCHAR(50) NULL DEFAULT \'url\',
                     `BP_TEMPLATE_ID` INT UNSIGNED NULL,
                     `PARAM_NAME` VARCHAR(100) NULL,
                     `PARAM_TITLE` VARCHAR(255) NULL,
@@ -160,8 +160,16 @@ class my_bpbutton extends CModule
             $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'ACTION_TYPE'");
             if (!$result->fetch()) {
                 $connection->queryExecute(
-                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `ACTION_TYPE` VARCHAR(20) NULL DEFAULT \'url\' AFTER `BUTTON_SIZE`'
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `ACTION_TYPE` VARCHAR(50) NULL DEFAULT \'url\' AFTER `BUTTON_SIZE`'
                 );
+            } else {
+                $column = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'ACTION_TYPE'")->fetch();
+                $type = strtolower((string)($column['Type'] ?? ''));
+                if ($type !== '' && str_contains($type, 'varchar(20)')) {
+                    $connection->queryExecute(
+                        'ALTER TABLE `' . $tableName . '` MODIFY COLUMN `ACTION_TYPE` VARCHAR(50) NULL DEFAULT \'url\''
+                    );
+                }
             }
             $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'BP_TEMPLATE_ID'");
             if (!$result->fetch()) {

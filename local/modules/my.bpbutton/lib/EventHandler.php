@@ -73,8 +73,16 @@ class EventHandler
             $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'ACTION_TYPE'");
             if (!$result->fetch()) {
                 $connection->queryExecute(
-                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `ACTION_TYPE` VARCHAR(20) NULL DEFAULT \'url\' AFTER `BUTTON_SIZE`'
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `ACTION_TYPE` VARCHAR(50) NULL DEFAULT \'url\' AFTER `BUTTON_SIZE`'
                 );
+            } else {
+                $column = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'ACTION_TYPE'")->fetch();
+                $type = strtolower((string)($column['Type'] ?? ''));
+                if ($type !== '' && str_contains($type, 'varchar(20)')) {
+                    $connection->queryExecute(
+                        'ALTER TABLE `' . $tableName . '` MODIFY COLUMN `ACTION_TYPE` VARCHAR(50) NULL DEFAULT \'url\''
+                    );
+                }
             }
             $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'BP_TEMPLATE_ID'");
             if (!$result->fetch()) {
