@@ -61,6 +61,8 @@ if ($isPost && $isAjax && (isset($_POST['save']) || isset($_POST['apply'])) && $
         $postData = [
             'ACTION_TYPE' => $request->getPost('ACTION_TYPE'),
             'BP_TEMPLATE_ID' => $request->getPost('BP_TEMPLATE_ID'),
+            'PARAM_NAME' => $request->getPost('PARAM_NAME'),
+            'PARAM_TITLE' => $request->getPost('PARAM_TITLE'),
             'HANDLER_URL' => $request->getPost('HANDLER_URL'),
             'TITLE' => $request->getPost('TITLE'),
             'WIDTH' => $request->getPost('WIDTH'),
@@ -134,6 +136,8 @@ if ($isPost && (isset($_POST['save']) || isset($_POST['apply']))) {
     $postData = [
         'ACTION_TYPE' => $request->getPost('ACTION_TYPE'),
         'BP_TEMPLATE_ID' => $request->getPost('BP_TEMPLATE_ID'),
+        'PARAM_NAME' => $request->getPost('PARAM_NAME'),
+        'PARAM_TITLE' => $request->getPost('PARAM_TITLE'),
         'HANDLER_URL' => $request->getPost('HANDLER_URL'),
         'TITLE' => $request->getPost('TITLE'),
         'WIDTH' => $request->getPost('WIDTH'),
@@ -250,10 +254,12 @@ $tabControl = new CAdminTabControl('tabControl', [
     <?php endif; ?>
     <?php
     $actionType = trim((string)($settingsRow['ACTION_TYPE'] ?? ''));
-    if ($actionType !== 'url' && $actionType !== 'bp_launch') {
+    if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params'], true)) {
         $actionType = 'url';
     }
     $bpTemplateId = (int)($settingsRow['BP_TEMPLATE_ID'] ?? 0);
+    $paramName = trim((string)($settingsRow['PARAM_NAME'] ?? ''));
+    $paramTitle = trim((string)($settingsRow['PARAM_TITLE'] ?? ''));
     $entityId = trim((string)($settingsRow['ENTITY_ID'] ?? ''));
     $resolver = new BpTemplateResolver();
     $bpTemplates = $entityId !== '' ? $resolver->getTemplatesByEntityId($entityId) : [];
@@ -264,9 +270,11 @@ $tabControl = new CAdminTabControl('tabControl', [
             <label><input type="radio" name="ACTION_TYPE" value="url"<?= $actionType === 'url' ? ' checked' : ''; ?>> <?= htmlspecialcharsbx(Loc::getMessage('BPBUTTON_ACTION_TYPE_URL') ?: 'URL обработчика'); ?></label>
             &nbsp;&nbsp;
             <label><input type="radio" name="ACTION_TYPE" value="bp_launch"<?= $actionType === 'bp_launch' ? ' checked' : ''; ?>> <?= htmlspecialcharsbx(Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH') ?: 'Запуск бизнес-процесса'); ?></label>
+            &nbsp;&nbsp;
+            <label><input type="radio" name="ACTION_TYPE" value="bp_launch_with_params"<?= $actionType === 'bp_launch_with_params' ? ' checked' : ''; ?>> <?= htmlspecialcharsbx(Loc::getMessage('BPBUTTON_ACTION_TYPE_BP_LAUNCH_WITH_PARAMS') ?: 'Запуск БП с параметром'); ?></label>
         </td>
     </tr>
-    <tr id="bp-template-row" style="<?= $actionType !== 'bp_launch' ? 'display:none;' : ''; ?>">
+    <tr id="bp-template-row" style="<?= !in_array($actionType, ['bp_launch', 'bp_launch_with_params'], true) ? 'display:none;' : ''; ?>">
         <td><?= Loc::getMessage('BPBUTTON_BP_TEMPLATE_SELECT') ?: 'Шаблон БП'; ?>:</td>
         <td>
             <select name="BP_TEMPLATE_ID" style="min-width: 300px;">
@@ -280,8 +288,26 @@ $tabControl = new CAdminTabControl('tabControl', [
             <?php endif; ?>
         </td>
     </tr>
+    <tr id="bp-param-name-row" style="<?= $actionType !== 'bp_launch_with_params' ? 'display:none;' : ''; ?>">
+        <td><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_PARAM_NAME') ?: 'Имя параметра (EN)'); ?>:</td>
+        <td>
+            <input type="text" name="PARAM_NAME" size="40"
+                   value="<?= htmlspecialcharsbx($paramName); ?>"
+                   placeholder="comment_text">
+            <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_PARAM_NAME_HINT') ?: 'Латиница, цифры, _. Первый символ — буква.'); ?></div>
+        </td>
+    </tr>
+    <tr id="bp-param-title-row" style="<?= $actionType !== 'bp_launch_with_params' ? 'display:none;' : ''; ?>">
+        <td><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_PARAM_TITLE') ?: 'Название параметра'); ?>:</td>
+        <td>
+            <input type="text" name="PARAM_TITLE" size="40"
+                   value="<?= htmlspecialcharsbx($paramTitle); ?>"
+                   placeholder="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_PARAM_TITLE_PLACEHOLDER') ?: 'Комментарий'); ?>">
+            <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_PARAM_TITLE_HINT') ?: 'Показывается пользователю в окне ввода перед запуском БП.'); ?></div>
+        </td>
+    </tr>
     <?php $hideBpTab = ($settingsRow['HIDE_BP_TAB'] ?? 'N') === 'Y'; ?>
-    <tr id="hide-bp-tab-row" style="<?= $actionType !== 'bp_launch' ? 'display:none;' : ''; ?>">
+    <tr id="hide-bp-tab-row" style="<?= !in_array($actionType, ['bp_launch', 'bp_launch_with_params'], true) ? 'display:none;' : ''; ?>">
         <td><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HIDE_BP_TAB') ?: 'Скрыть вкладку Бизнес-процессы'); ?>:</td>
         <td>
             <input type="checkbox" name="HIDE_BP_TAB" value="Y"<?= $hideBpTab ? ' checked' : ''; ?>
@@ -295,7 +321,7 @@ $tabControl = new CAdminTabControl('tabControl', [
             <input type="text" name="HANDLER_URL" size="60"
                    value="<?= htmlspecialcharsbx((string)$settingsRow['HANDLER_URL']); ?>"
                    title="<?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?>"
-                   <?= $actionType === 'bp_launch' ? ' placeholder="' . htmlspecialcharsbx(Loc::getMessage('BPBUTTON_HANDLER_URL_OPTIONAL') ?: 'Не требуется для запуска БП') . '"' : ''; ?>>
+                   <?= in_array($actionType, ['bp_launch', 'bp_launch_with_params'], true) ? ' placeholder="' . htmlspecialcharsbx(Loc::getMessage('BPBUTTON_HANDLER_URL_OPTIONAL') ?: 'Не требуется для запуска БП') . '"' : ''; ?>>
             <div style="margin-top: 4px; color: #666; font-size: 11px;"><?= htmlspecialcharsbx(Loc::getMessage('MY_BPBUTTON_EDIT_FIELD_HANDLER_URL_HINT') ?: ''); ?></div>
         </td>
     </tr>
@@ -358,12 +384,18 @@ $tabControl = new CAdminTabControl('tabControl', [
     var radios = document.querySelectorAll('input[name="ACTION_TYPE"]');
     var bpRow = document.getElementById('bp-template-row');
     var hideBpTabRow = document.getElementById('hide-bp-tab-row');
+    var bpParamNameRow = document.getElementById('bp-param-name-row');
+    var bpParamTitleRow = document.getElementById('bp-param-title-row');
     if (radios.length && bpRow) {
         function toggle() {
             var v = document.querySelector('input[name="ACTION_TYPE"]:checked');
-            var show = (v && v.value === 'bp_launch');
-            bpRow.style.display = show ? '' : 'none';
-            if (hideBpTabRow) hideBpTabRow.style.display = show ? '' : 'none';
+            var action = v ? v.value : 'url';
+            var showBp = (action === 'bp_launch' || action === 'bp_launch_with_params');
+            var showParam = (action === 'bp_launch_with_params');
+            bpRow.style.display = showBp ? '' : 'none';
+            if (hideBpTabRow) hideBpTabRow.style.display = showBp ? '' : 'none';
+            if (bpParamNameRow) bpParamNameRow.style.display = showParam ? '' : 'none';
+            if (bpParamTitleRow) bpParamTitleRow.style.display = showParam ? '' : 'none';
         }
         radios.forEach(function(r) { r.addEventListener('change', toggle); });
         toggle();

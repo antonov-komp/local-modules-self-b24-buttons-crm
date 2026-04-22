@@ -83,6 +83,22 @@ class SettingsTable extends Entity\DataManager
 
             new Entity\IntegerField('BP_TEMPLATE_ID', []),
 
+            new Entity\StringField('PARAM_NAME', [
+                'validation' => static function () {
+                    return [
+                        new Entity\Validator\Length(null, 100),
+                    ];
+                },
+            ]),
+
+            new Entity\StringField('PARAM_TITLE', [
+                'validation' => static function () {
+                    return [
+                        new Entity\Validator\Length(null, 255),
+                    ];
+                },
+            ]),
+
             new Entity\BooleanField('HIDE_BP_TAB', [
                 'values'  => ['N', 'Y'],
                 'default' => 'N',

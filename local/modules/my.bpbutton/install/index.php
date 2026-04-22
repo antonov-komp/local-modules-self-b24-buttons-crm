@@ -130,6 +130,8 @@ class my_bpbutton extends CModule
                     `BUTTON_SIZE` VARCHAR(20) NULL,
                     `ACTION_TYPE` VARCHAR(20) NULL DEFAULT \'url\',
                     `BP_TEMPLATE_ID` INT UNSIGNED NULL,
+                    `PARAM_NAME` VARCHAR(100) NULL,
+                    `PARAM_TITLE` VARCHAR(255) NULL,
                     `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\',
                     `ACTIVE` CHAR(1) NOT NULL DEFAULT \'Y\',
                     `CREATED_AT` DATETIME NOT NULL,
@@ -167,11 +169,24 @@ class my_bpbutton extends CModule
                     'ALTER TABLE `' . $tableName . '` ADD COLUMN `BP_TEMPLATE_ID` INT UNSIGNED NULL AFTER `ACTION_TYPE`'
                 );
             }
+            // Миграция TASK-015: PARAM_NAME и PARAM_TITLE
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'PARAM_NAME'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `PARAM_NAME` VARCHAR(100) NULL AFTER `BP_TEMPLATE_ID`'
+                );
+            }
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'PARAM_TITLE'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `PARAM_TITLE` VARCHAR(255) NULL AFTER `PARAM_NAME`'
+                );
+            }
             // Миграция TASK-014-A: HIDE_BP_TAB
             $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'HIDE_BP_TAB'");
             if (!$result->fetch()) {
                 $connection->queryExecute(
-                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\' AFTER `BP_TEMPLATE_ID`'
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\' AFTER `PARAM_TITLE`'
                 );
             }
         }

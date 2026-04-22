@@ -45,12 +45,15 @@ final class ButtonService
         }
 
         $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
-        if ($actionType !== 'url' && $actionType !== 'bp_launch') {
+        if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params'], true)) {
             $actionType = 'url';
         }
 
         if ($actionType === 'bp_launch') {
             return $this->getBpLaunchConfig($entityId, $elementId, $fieldId, $userId, $settings);
+        }
+        if ($actionType === 'bp_launch_with_params') {
+            return $this->getBpLaunchWithParamsConfig($entityId, $elementId, $fieldId, $userId, $settings);
         }
 
         $handlerUrl = trim((string)($settings['HANDLER_URL'] ?? ''));
@@ -129,6 +132,130 @@ final class ButtonService
                 'bpTemplateId' => $templateId,
                 'starterConfig' => $starterConfig,
                 'context' => $context,
+            ],
+        ];
+    }
+
+    /**
+     * Конфигурация для запуска бизнес-процесса с параметром (actionType = bp_launch_with_params).
+     */
+    private function getBpLaunchWithParamsConfig(string $entityId, int $elementId, int $fieldId, int $userId, array $settings): array
+    {
+        $templateId = (int)($settings['BP_TEMPLATE_ID'] ?? 0);
+        if ($templateId <= 0) {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_BP_TEMPLATE_NOT_SET') ?: 'Шаблон БП не выбран. Настройте кнопку.');
+        }
+
+        $paramName = trim((string)($settings['PARAM_NAME'] ?? ''));
+        $paramTitle = trim((string)($settings['PARAM_TITLE'] ?? ''));
+        if ($paramName === '' || !preg_match('~^[A-Za-z][A-Za-z0-9_]*$~', $paramName)) {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_PARAM_NAME_INVALID') ?: 'Некорректное имя параметра запуска БП.');
+        }
+        if ($paramTitle === '') {
+            $paramTitle = Loc::getMessage('MY_BPBUTTON_SERVICE_PARAM_TITLE_DEFAULT') ?: 'Параметр';
+        }
+
+        $context = [
+            'settingsId' => (int)($settings['ID'] ?? 0),
+            'entityId' => $entityId,
+            'elementId' => $elementId,
+            'fieldId' => $fieldId,
+            'userId' => $userId,
+        ];
+
+        return [
+            'success' => true,
+            'data' => [
+                'actionType' => 'bp_launch_with_params',
+                'bpTemplateId' => $templateId,
+                'paramMeta' => [
+                    'name' => $paramName,
+                    'title' => $paramTitle,
+                    'type' => 'string',
+                ],
+                'context' => $context,
+            ],
+        ];
+    }
+
+    /**
+     * Запуск БП с пользовательским строковым параметром.
+     */
+    public function startBpWithParams(string $entityId, int $elementId, int $fieldId, int $userId, string $value): array
+    {
+        $settings = $this->repository->getByFieldId($fieldId);
+        if (!$settings) {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_SETTINGS_NOT_FOUND') ?: 'Кнопка не настроена.');
+        }
+        if (($settings['ACTIVE'] ?? 'N') !== 'Y') {
+            return $this->error('BUTTON_INACTIVE', Loc::getMessage('MY_BPBUTTON_SERVICE_BUTTON_INACTIVE') ?: 'Действие недоступно. Кнопка отключена администратором.');
+        }
+        if (($settings['ACTION_TYPE'] ?? 'url') !== 'bp_launch_with_params') {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_ACTION_NOT_SUPPORTED') ?: 'Текущий режим кнопки не поддерживает запуск с параметрами.');
+        }
+
+        if (!Loader::includeModule('bizproc') || !Loader::includeModule('crm')) {
+            return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_BP_MODULE_REQUIRED') ?: 'Требуется модуль bizproc.');
+        }
+
+        $templateId = (int)($settings['BP_TEMPLATE_ID'] ?? 0);
+        $paramName = trim((string)($settings['PARAM_NAME'] ?? ''));
+        $value = trim($value);
+
+        if ($templateId <= 0) {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_BP_TEMPLATE_NOT_SET') ?: 'Шаблон БП не выбран. Настройте кнопку.');
+        }
+        if ($paramName === '' || !preg_match('~^[A-Za-z][A-Za-z0-9_]*$~', $paramName)) {
+            return $this->error('SETTINGS_NOT_FOUND', Loc::getMessage('MY_BPBUTTON_SERVICE_PARAM_NAME_INVALID') ?: 'Некорректное имя параметра запуска БП.');
+        }
+        if ($value === '') {
+            return $this->error('VALIDATION_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_PARAM_VALUE_REQUIRED') ?: 'Введите значение параметра.');
+        }
+
+        $entityTypeId = BpTemplateResolver::resolveEntityTypeIdFromEntityId($entityId);
+        if ($entityTypeId <= 0) {
+            return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_INVALID_ENTITY') ?: 'Некорректный тип сущности.');
+        }
+
+        $documentId = CCrmBizProcHelper::ResolveDocumentId($entityTypeId, $elementId);
+        if (!is_array($documentId) || count($documentId) < 3) {
+            return $this->error('INTERNAL_ERROR', Loc::getMessage('MY_BPBUTTON_SERVICE_INVALID_DOCUMENT') ?: 'Не удалось подготовить документ для запуска БП.');
+        }
+
+        if ($userId <= 0) {
+            return $this->error('ACCESS_DENIED', Loc::getMessage('MY_BPBUTTON_SERVICE_ACCESS_DENIED') ?: 'Недостаточно прав для запуска БП.');
+        }
+
+        if (class_exists('\CBPDocument') && class_exists('\CBPCanUserOperateOperation')) {
+            $canStart = \CBPDocument::canUserOperateDocument(
+                \CBPCanUserOperateOperation::StartWorkflow,
+                $userId,
+                $documentId,
+                ['WorkflowTemplateId' => $templateId]
+            );
+            if (!$canStart) {
+                return $this->error('ACCESS_DENIED', Loc::getMessage('MY_BPBUTTON_SERVICE_ACCESS_DENIED') ?: 'Недостаточно прав для запуска БП.');
+            }
+        }
+
+        $errors = [];
+        $parameters = [
+            \CBPDocument::PARAM_TAGRET_USER => 'user_' . $userId,
+            $paramName => $value,
+        ];
+        $workflowId = \CBPDocument::StartWorkflow($templateId, $documentId, $parameters, $errors);
+        if (!$workflowId) {
+            $errorText = '';
+            if (!empty($errors[0]['message'])) {
+                $errorText = (string)$errors[0]['message'];
+            }
+            return $this->error('BP_START_FAILED', $errorText !== '' ? $errorText : (Loc::getMessage('MY_BPBUTTON_SERVICE_BP_START_FAILED') ?: 'Не удалось запустить бизнес-процесс.'));
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'workflowId' => (string)$workflowId,
             ],
         ];
     }

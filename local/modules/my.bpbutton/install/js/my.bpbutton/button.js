@@ -139,6 +139,12 @@
 				var ctx = data.context || fallbackContext || {};
 				var actionType = data.actionType || 'url';
 
+				if (actionType === 'bp_launch_with_params' && data.bpTemplateId && data.paramMeta)
+				{
+					this.handleBpLaunchWithParams(buttonEl, data, ctx);
+					return;
+				}
+
 				if (actionType === 'bp_launch' && data.bpTemplateId && data.starterConfig)
 				{
 					this.handleBpLaunch(buttonEl, data, ctx);
@@ -187,6 +193,119 @@
 
 			State.notify(msg);
 			this.logClick(buttonEl, fallbackContext, code, msg);
+		},
+
+		handleBpLaunchWithParams: function (buttonEl, data, ctx)
+		{
+			var self = this;
+			var meta = data.paramMeta || {};
+			var title = (meta.title || '').trim() || State.message('MY_BPBTN_PARAM_TITLE_DEFAULT', 'Параметр');
+			var popupTitle = State.message('MY_BPBTN_PARAM_POPUP_TITLE', 'Запуск бизнес-процесса');
+			var valueInput = BX.create('input', {
+				attrs: {
+					type: 'text',
+					placeholder: State.message('MY_BPBTN_PARAM_INPUT_PLACEHOLDER', 'Введите значение')
+				},
+				props: {
+					className: 'ui-ctl-element'
+				},
+				style: {
+					width: '100%'
+				}
+			});
+			var content = BX.create('div', {
+				style: { padding: '8px 0' },
+				children: [
+					BX.create('div', {
+						text: title,
+						style: { marginBottom: '8px', fontWeight: '600' }
+					}),
+					BX.create('div', {
+						props: { className: 'ui-ctl ui-ctl-textbox' },
+						style: { width: '100%' },
+						children: [valueInput]
+					})
+				]
+			});
+
+			var popup = new BX.PopupWindow(null, buttonEl, {
+				content: content,
+				autoHide: false,
+				closeByEsc: true,
+				overlay: true,
+				draggable: false,
+				titleBar: popupTitle,
+				width: 420,
+				buttons: [
+					new BX.PopupWindowButton({
+						text: State.message('MY_BPBTN_EXECUTE', 'Выполнить'),
+						className: 'ui-btn ui-btn-success',
+						events: {
+							click: function () {
+								var enteredValue = (valueInput.value || '').trim();
+								if (!enteredValue)
+								{
+									State.notify(State.message('MY_BPBTN_PARAM_VALUE_REQUIRED', 'Введите значение параметра.'));
+									valueInput.focus();
+									return;
+								}
+
+								State.setLoading(buttonEl);
+								Api.startBpWithParams(
+									{
+										entityId: ctx.entityId || '',
+										elementId: ctx.elementId || 0,
+										fieldId: ctx.fieldId || 0,
+										value: enteredValue
+									},
+									function (response) {
+										State.setIdle(buttonEl);
+										if (response && response.success === true)
+										{
+											popup.close();
+											State.notify(State.message('MY_BPBTN_BP_SUCCESS', 'Бизнес-процесс запущен'));
+											self.logClick(buttonEl, ctx, 'SUCCESS', null);
+											return;
+										}
+
+										var msg = (response && response.error && response.error.message)
+											? String(response.error.message)
+											: State.message('MY_BPBTN_ERROR_INTERNAL_ERROR', 'Произошла ошибка. Попробуйте позже или обратитесь к администратору.');
+										var code = (response && response.error && response.error.code)
+											? String(response.error.code)
+											: 'INTERNAL_ERROR';
+										State.notify(msg);
+										self.logClick(buttonEl, ctx, code, msg);
+									},
+									function () {
+										State.setIdle(buttonEl);
+										State.notify(State.message('MY_BPBTN_ERROR_INTERNAL_ERROR', 'Произошла ошибка. Попробуйте позже или обратитесь к администратору.'));
+										self.logClick(buttonEl, ctx, 'INTERNAL_ERROR', 'AJAX failure');
+									}
+								);
+							}
+						}
+					}),
+					new BX.PopupWindowButtonLink({
+						text: State.message('MY_BPBTN_CANCEL', 'Отмена'),
+						className: 'ui-btn ui-btn-link',
+						events: {
+							click: function () {
+								popup.close();
+							}
+						}
+					})
+				],
+				events: {
+					onPopupClose: function () {
+						popup.destroy();
+					}
+				}
+			});
+
+			State.setIdle(buttonEl);
+			popup.show();
+			setTimeout(function () { valueInput.focus(); }, 30);
 		},
 
 		handleBpLaunch: function (buttonEl, data, ctx)

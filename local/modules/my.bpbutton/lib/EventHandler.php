@@ -82,6 +82,18 @@ class EventHandler
                     'ALTER TABLE `' . $tableName . '` ADD COLUMN `BP_TEMPLATE_ID` INT UNSIGNED NULL AFTER `ACTION_TYPE`'
                 );
             }
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'PARAM_NAME'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `PARAM_NAME` VARCHAR(100) NULL AFTER `BP_TEMPLATE_ID`'
+                );
+            }
+            $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'PARAM_TITLE'");
+            if (!$result->fetch()) {
+                $connection->queryExecute(
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `PARAM_TITLE` VARCHAR(255) NULL AFTER `PARAM_NAME`'
+                );
+            }
         } catch (\Throwable $e) {
             // Игнорируем ошибки миграции
         }
@@ -101,7 +113,7 @@ class EventHandler
             $result = $connection->query("SHOW COLUMNS FROM `{$tableName}` LIKE 'HIDE_BP_TAB'");
             if (!$result->fetch()) {
                 $connection->queryExecute(
-                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\' AFTER `BP_TEMPLATE_ID`'
+                    'ALTER TABLE `' . $tableName . '` ADD COLUMN `HIDE_BP_TAB` CHAR(1) NOT NULL DEFAULT \'N\' AFTER `PARAM_TITLE`'
                 );
             }
         } catch (\Throwable $e) {
@@ -231,12 +243,18 @@ class EventHandler
 
             $settings = $field['SETTINGS'] ?? [];
             $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
-            if ($actionType !== 'url' && $actionType !== 'bp_launch') {
+            if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params'], true)) {
                 $actionType = 'url';
             }
             $bpTemplateId = isset($settings['BP_TEMPLATE_ID']) ? (int)$settings['BP_TEMPLATE_ID'] : null;
             if ($bpTemplateId <= 0) {
                 $bpTemplateId = null;
+            }
+            $paramName = trim((string)($settings['PARAM_NAME'] ?? ''));
+            $paramTitle = trim((string)($settings['PARAM_TITLE'] ?? ''));
+            if ($actionType !== 'bp_launch_with_params') {
+                $paramName = '';
+                $paramTitle = '';
             }
 
             // Создаём дефолтную запись настроек для поля.
@@ -250,6 +268,8 @@ class EventHandler
                 'BUTTON_SIZE'   => null,
                 'ACTION_TYPE'   => $actionType,
                 'BP_TEMPLATE_ID'=> $bpTemplateId,
+                'PARAM_NAME'    => ($paramName !== '' ? $paramName : null),
+                'PARAM_TITLE'   => ($paramTitle !== '' ? $paramTitle : null),
                 'ACTIVE'        => 'Y',
                 'CREATED_AT'    => new \Bitrix\Main\Type\DateTime(),
                 'UPDATED_AT'    => new \Bitrix\Main\Type\DateTime(),
@@ -295,13 +315,19 @@ class EventHandler
             $settings = $field['SETTINGS'] ?? [];
 
             $actionType = trim((string)($settings['ACTION_TYPE'] ?? ''));
-            if ($actionType !== 'url' && $actionType !== 'bp_launch') {
+            if (!in_array($actionType, ['url', 'bp_launch', 'bp_launch_with_params'], true)) {
                 $actionType = 'url';
             }
 
             $bpTemplateId = isset($settings['BP_TEMPLATE_ID']) ? (int)$settings['BP_TEMPLATE_ID'] : null;
             if ($bpTemplateId <= 0) {
                 $bpTemplateId = null;
+            }
+            $paramName = trim((string)($settings['PARAM_NAME'] ?? ''));
+            $paramTitle = trim((string)($settings['PARAM_TITLE'] ?? ''));
+            if ($actionType !== 'bp_launch_with_params') {
+                $paramName = '';
+                $paramTitle = '';
             }
 
             $settingsRow = SettingsTable::getList([
@@ -314,6 +340,8 @@ class EventHandler
                 SettingsTable::update((int)$settingsRow['ID'], [
                     'ACTION_TYPE' => $actionType,
                     'BP_TEMPLATE_ID' => $bpTemplateId,
+                    'PARAM_NAME' => ($paramName !== '' ? $paramName : null),
+                    'PARAM_TITLE' => ($paramTitle !== '' ? $paramTitle : null),
                     'UPDATED_AT' => new \Bitrix\Main\Type\DateTime(),
                 ]);
             }

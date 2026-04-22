@@ -54,8 +54,48 @@
 		});
 	}
 
+	/**
+	 * Запуск БП с параметром.
+	 * @param {object} params — { entityId, elementId, fieldId, value }
+	 * @param {function} onSuccess
+	 * @param {function} onFailure
+	 */
+	function startBpWithParams(params, onSuccess, onFailure)
+	{
+		if (!onSuccess || typeof onSuccess !== 'function')
+		{
+			onSuccess = function () {};
+		}
+		if (!onFailure || typeof onFailure !== 'function')
+		{
+			onFailure = function () {};
+		}
+
+		BX.ajax({
+			url: getConfigUrl(),
+			method: 'POST',
+			dataType: 'json',
+			cache: false,
+			data: {
+				action: 'startBpWithParams',
+				entityId: params.entityId || '',
+				elementId: params.elementId || 0,
+				fieldId: params.fieldId || 0,
+				value: params.value || '',
+				sessid: (BX.bitrix_sessid ? BX.bitrix_sessid() : '')
+			},
+			onsuccess: function (response) {
+				onSuccess(response);
+			},
+			onfailure: function () {
+				onFailure();
+			}
+		});
+	}
+
 	BX.MyBpButton.ButtonApi = {
 		getConfigUrl: getConfigUrl,
-		fetchConfig: fetchConfig
+		fetchConfig: fetchConfig,
+		startBpWithParams: startBpWithParams
 	};
 })();

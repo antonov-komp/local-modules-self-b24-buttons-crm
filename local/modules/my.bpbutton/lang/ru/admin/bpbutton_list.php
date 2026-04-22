@@ -61,7 +61,16 @@ $MESS['MY_BPBUTTON_EDIT_ERROR_INVALID_WIDTH'] = 'Некорректное зна
 $MESS['MY_BPBUTTON_EDIT_ERROR_INVALID_URL'] = 'Некорректный формат URL обработчика.';
 $MESS['MY_BPBUTTON_EDIT_ERROR_HANDLER_REQUIRED'] = 'Укажите URL обработчика.';
 $MESS['MY_BPBUTTON_EDIT_ERROR_BP_TEMPLATE_REQUIRED'] = 'Выберите шаблон бизнес-процесса.';
+$MESS['MY_BPBUTTON_EDIT_ERROR_PARAM_NAME_REQUIRED'] = 'Укажите имя параметра (EN).';
+$MESS['MY_BPBUTTON_EDIT_ERROR_PARAM_NAME_INVALID'] = 'Имя параметра должно содержать латиницу, цифры и _. Первый символ — буква.';
+$MESS['MY_BPBUTTON_EDIT_ERROR_PARAM_TITLE_REQUIRED'] = 'Укажите название параметра.';
 $MESS['MY_BPBUTTON_EDIT_FIELD_ACTION_TYPE'] = 'Тип действия';
+$MESS['MY_BPBUTTON_EDIT_FIELD_PARAM_NAME'] = 'Имя параметра (EN)';
+$MESS['MY_BPBUTTON_EDIT_FIELD_PARAM_NAME_HINT'] = 'Латиница, цифры и _. Первый символ — буква.';
+$MESS['MY_BPBUTTON_EDIT_FIELD_PARAM_TITLE'] = 'Название параметра';
+$MESS['MY_BPBUTTON_EDIT_FIELD_PARAM_TITLE_PLACEHOLDER'] = 'Комментарий';
+$MESS['MY_BPBUTTON_EDIT_FIELD_PARAM_TITLE_HINT'] = 'Показывается пользователю в окне ввода перед запуском БП.';
+$MESS['BPBUTTON_ACTION_TYPE_BP_LAUNCH_WITH_PARAMS'] = 'Запуск БП с параметром';
 
 $MESS['MY_BPBUTTON_ADMIN_ACTIVE_HINT_Y'] = 'Кнопка доступна пользователям CRM';
 $MESS['MY_BPBUTTON_ADMIN_ACTIVE_HINT_N'] = 'Кнопка временно отключена';

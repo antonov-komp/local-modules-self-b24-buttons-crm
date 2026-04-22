@@ -29,10 +29,16 @@ $request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
 $entityId = (string)$request->getPost('entityId');
 $elementId = (int)$request->getPost('elementId');
 $fieldId = (int)$request->getPost('fieldId');
+$action = (string)$request->getPost('action');
+$value = (string)$request->getPost('value');
 
 try {
     $controller = new ButtonController();
-    $result = $controller->getConfigAction($entityId, $elementId, $fieldId);
+    if ($action === 'startBpWithParams') {
+        $result = $controller->startBpWithParamsAction($entityId, $elementId, $fieldId, $value);
+    } else {
+        $result = $controller->getConfigAction($entityId, $elementId, $fieldId);
+    }
 } catch (\Throwable $e) {
     $result = [
         'success' => false,
